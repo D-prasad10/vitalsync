@@ -1,12 +1,28 @@
 # Dependencies
 node_modules/
 **/node_modules/
+.pub-cache/
+.pub/
 
 # Production / Build artifacts
 dist/
 **/dist/
 build/
 **/build/
+mobile/build/
+mobile/.dart_tool/
+mobile/.pub/
+mobile/.flutter-plugins
+mobile/.flutter-plugins-dependencies
+mobile/.packages
+
+# Flutter / Mobile Artifacts
+*.apk
+*.aab
+*.ipa
+*.app
+*.dSYM/
+.dart_tool/
 
 # Database files & local DBs
 *.db
@@ -19,6 +35,7 @@ backend/*.db
 .env.local
 .env.*.local
 *.env
+!.env.example
 
 # Logs
 *.log
@@ -39,3 +56,4 @@ Thumbs.db
 *.njsproj
 *.sln
 *.swp
+*.workspace
