@@ -44,9 +44,22 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen> {
           ],
         ),
       ),
-      body: p == null
+      body: patientProvider.isLoadingPatients
           ? const Center(child: CircularProgressIndicator())
-          : ListView(
+          : (p == null
+              ? const Center(
+                  child: Card(
+                    margin: EdgeInsets.all(24),
+                    child: Padding(
+                      padding: EdgeInsets.all(24.0),
+                      child: Text(
+                        'No patient selected or available.',
+                        style: TextStyle(color: AppTheme.textSecondary),
+                      ),
+                    ),
+                  ),
+                )
+              : ListView(
               padding: const EdgeInsets.all(16.0),
               children: [
                 // Profile Banner
@@ -126,7 +139,7 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen> {
                   unit: '°F',
                 ),
               ],
-            ),
+            )),
     );
   }
 }

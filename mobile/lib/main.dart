@@ -5,6 +5,7 @@ import 'providers/auth_provider.dart';
 import 'providers/patient_provider.dart';
 import 'providers/telemetry_provider.dart';
 import 'routes/app_routes.dart';
+import 'screens/login/login_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -22,25 +23,24 @@ class VitalsSyncApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => PatientProvider()),
         ChangeNotifierProvider(create: (_) => TelemetryProvider()),
       ],
-      child: Consumer<AuthProvider>(
-        builder: (context, authProvider, _) {
-          if (authProvider.isLoading) {
-            return MaterialApp(
-              theme: AppTheme.darkTheme,
-              home: const Scaffold(
+      child: MaterialApp(
+        title: 'VitalsSync Healthcare',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.darkTheme,
+        routes: AppRoutes.routes,
+        home: Consumer<AuthProvider>(
+          builder: (context, authProvider, _) {
+            if (authProvider.isLoading) {
+              return const Scaffold(
                 body: Center(child: CircularProgressIndicator()),
-              ),
-            );
-          }
-
-          return MaterialApp(
-            title: 'VitalsSync Healthcare',
-            debugShowCheckedModeBanner: false,
-            theme: AppTheme.darkTheme,
-            initialRoute: authProvider.isAuthenticated ? '/main' : '/login',
-            routes: AppRoutes.routes,
-          );
-        },
+              );
+            }
+            if (authProvider.isAuthenticated) {
+              return const MainNavigationShell();
+            }
+            return const LoginScreen();
+          },
+        ),
       ),
     );
   }

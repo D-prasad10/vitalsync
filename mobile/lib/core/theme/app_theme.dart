@@ -46,7 +46,7 @@ class AppTheme {
         titleLarge: const TextStyle(color: textPrimary, fontSize: 20, fontWeight: FontWeight.bold),
       ),
       appBarTheme: AppBarTheme(
-        backgroundColor: bgPanelSolid.withOpacity(0.9),
+        backgroundColor: bgPanelSolid.withValues(alpha: 0.9),
         elevation: 0,
         centerTitle: false,
         iconTheme: const IconThemeData(color: accentPrimary),

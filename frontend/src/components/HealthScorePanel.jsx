@@ -6,6 +6,7 @@ import {
 import { Activity, HeartPulse, Thermometer, Wind } from 'lucide-react';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
+ChartJS.defaults.animation = false;
 
 // Health Score Progress Bar Component
 const CircularProgress = ({ score }) => {
@@ -106,6 +107,7 @@ const HealthScorePanel = ({ currentData, historyData }) => {
   // Prepare Chart Data
   const chartData = useMemo(() => {
     if (!historyData || historyData.length === 0) return null;
+    const sourceData = historyData.length > 500 ? historyData.slice(-500) : historyData;
     
     // Calculate 7 days ago limit
     const now = new Date();
@@ -113,7 +115,7 @@ const HealthScorePanel = ({ currentData, historyData }) => {
     const sevenDaysAgo = startOfToday - (6 * 24 * 60 * 60 * 1000); // including today makes 7
 
     // Filter for valid scores from the last 7 days
-    const validHistory = historyData.filter(d => 
+    const validHistory = sourceData.filter(d => 
       d.health_score !== undefined && 
       d.health_score !== null && 
       d.timestamp >= sevenDaysAgo
@@ -172,9 +174,10 @@ const HealthScorePanel = ({ currentData, historyData }) => {
     };
   }, [historyData]);
 
-  const chartOptions = {
+  const chartOptions = useMemo(() => ({
     responsive: true,
     maintainAspectRatio: false,
+    animation: false,
     plugins: {
       legend: { display: false },
       title: {
@@ -184,9 +187,10 @@ const HealthScorePanel = ({ currentData, historyData }) => {
         font: { size: 16, weight: 'bold' },
         padding: { bottom: 20 }
       },
-      tooltip: { 
-        mode: 'index', 
+      tooltip: {
+        mode: 'index',
         intersect: false,
+        animation: false,
         padding: 10,
         backgroundColor: 'rgba(0,0,0,0.8)',
         titleFont: { size: 14 },
@@ -197,7 +201,7 @@ const HealthScorePanel = ({ currentData, historyData }) => {
       }
     },
     scales: {
-      x: { 
+      x: {
         display: true,
         title: {
           display: true,
@@ -209,7 +213,7 @@ const HealthScorePanel = ({ currentData, historyData }) => {
         grid: { display: false },
         ticks: { color: 'var(--text-secondary)', maxRotation: 0, font: { size: 11 } }
       },
-      y: { 
+      y: {
         display: true,
         title: {
           display: true,
@@ -218,14 +222,14 @@ const HealthScorePanel = ({ currentData, historyData }) => {
           font: { size: 12, weight: 'bold' },
           padding: { bottom: 10 }
         },
-        min: 0, 
-        max: 100, 
-        border: { display: false }, 
-        grid: { color: 'rgba(255,255,255,0.05)', drawBorder: false }, 
-        ticks: { color: 'var(--text-secondary)', stepSize: 20, padding: 10 } 
+        min: 0,
+        max: 100,
+        border: { display: false },
+        grid: { color: 'rgba(255,255,255,0.05)', drawBorder: false },
+        ticks: { color: 'var(--text-secondary)', stepSize: 20, padding: 10 }
       }
     }
-  };
+  }), []);
 
   return (
     <div className="glass-panel" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.5rem', background: 'linear-gradient(145deg, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.1) 100%)' }}>
@@ -288,7 +292,7 @@ const HealthScorePanel = ({ currentData, historyData }) => {
       {chartData && chartData.labels.length > 0 ? (
         <div style={{ marginTop: '1rem' }}>
           <div style={{ height: '240px', width: '100%', background: 'rgba(0,0,0,0.2)', padding: '1rem', borderRadius: '8px' }}>
-            <Line data={chartData} options={chartOptions} />
+            <Line data={chartData} options={chartOptions} redraw={false} />
           </div>
         </div>
       ) : (
@@ -304,4 +308,4 @@ const HealthScorePanel = ({ currentData, historyData }) => {
   );
 };
 
-export default HealthScorePanel;
+export default React.memo(HealthScorePanel);

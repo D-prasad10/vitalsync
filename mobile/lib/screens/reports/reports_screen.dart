@@ -159,7 +159,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                               decoration: BoxDecoration(
-                                color: isAlert ? AppTheme.warning.withOpacity(0.2) : AppTheme.success.withOpacity(0.2),
+                                color: isAlert ? AppTheme.warning.withValues(alpha: 0.2) : AppTheme.success.withValues(alpha: 0.2),
                                 borderRadius: BorderRadius.circular(4),
                               ),
                               child: Text(

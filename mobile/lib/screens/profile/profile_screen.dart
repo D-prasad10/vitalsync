@@ -41,9 +41,9 @@ class ProfileScreen extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: AppTheme.accentPrimary.withOpacity(0.15),
+                      color: AppTheme.accentPrimary.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppTheme.accentPrimary.withOpacity(0.3)),
+                      border: Border.all(color: AppTheme.accentPrimary.withValues(alpha: 0.3)),
                     ),
                     child: Text(
                       (user?.role ?? 'Staff').toUpperCase(),
@@ -85,7 +85,7 @@ class ProfileScreen extends StatelessWidget {
           // Logout Action Button
           ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.danger.withOpacity(0.2),
+              backgroundColor: AppTheme.danger.withValues(alpha: 0.2),
               foregroundColor: AppTheme.danger,
               side: const BorderSide(color: AppTheme.danger),
             ),

@@ -36,25 +36,44 @@ class PatientProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> loadPatients() async {
+  Future<void> loadPatients({bool force = false}) async {
+    if (_isLoadingPatients) return;
+    if (!force && _patients.isNotEmpty) return;
+
     _isLoadingPatients = true;
     notifyListeners();
 
-    _patients = await _apiService.getPatients();
-    if (_patients.isNotEmpty && _selectedPatient == null) {
-      selectPatient(_patients.first);
+    try {
+      _patients = await _apiService.getPatients();
+      if (_patients.isNotEmpty && _selectedPatient == null) {
+        await selectPatient(_patients.first);
+      }
+    } catch (_) {
+      // Gracefully handle network exceptions without breaking UI
+    } finally {
+      _isLoadingPatients = false;
+      notifyListeners();
     }
-    _isLoadingPatients = false;
-    notifyListeners();
   }
 
   Future<void> selectPatient(Patient patient) async {
+    if (_selectedPatient?.id == patient.id && _history.isNotEmpty) {
+      _selectedPatient = patient;
+      notifyListeners();
+      return;
+    }
+
     _selectedPatient = patient;
     _isLoadingHistory = true;
     notifyListeners();
 
-    _history = await _apiService.getPatientHistory(patient.id);
-    _isLoadingHistory = false;
-    notifyListeners();
+    try {
+      _history = await _apiService.getPatientHistory(patient.id);
+    } catch (_) {
+      // Gracefully handle network exceptions without breaking UI
+    } finally {
+      _isLoadingHistory = false;
+      notifyListeners();
+    }
   }
 }

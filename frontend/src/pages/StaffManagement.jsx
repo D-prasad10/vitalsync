@@ -22,18 +22,23 @@ const StaffManagement = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('All');
 
-  const fetchStaff = () => {
+  useEffect(() => {
+    let mounted = true;
     setLoading(true);
     fetch('http://localhost:5001/api/staff')
       .then(res => res.json())
       .then(data => {
-        setStaff(Array.isArray(data) ? data : []);
-        setLoading(false);
+        if (mounted) {
+          setStaff(Array.isArray(data) ? data : []);
+          setLoading(false);
+        }
       })
-      .catch(() => setLoading(false));
-  };
+      .catch(() => {
+        if (mounted) setLoading(false);
+      });
 
-  useEffect(() => { fetchStaff(); }, []);
+    return () => { mounted = false; };
+  }, []);
 
   const validate = () => {
     const e = {};
@@ -61,9 +66,11 @@ const StaffManagement = () => {
         setServerError(data.error || 'Failed to add staff.');
       } else {
         setSuccessMsg(`✅ ${form.name} registered successfully!`);
+        if (data.staff) {
+          setStaff(prev => [...prev, data.staff]);
+        }
         setForm(defaultForm);
         setShowForm(false);
-        fetchStaff();
         setTimeout(() => setSuccessMsg(''), 3000);
       }
     } catch {
@@ -76,7 +83,7 @@ const StaffManagement = () => {
   const handleDelete = async (id, name) => {
     if (!window.confirm(`Remove "${name}" from hospital staff directory?`)) return;
     await fetch(`http://localhost:5001/api/staff/${id}`, { method: 'DELETE' });
-    fetchStaff();
+    setStaff((prev) => prev.filter((s) => s.id !== id));
   };
 
   const roleInfo = (role) => ROLES.find(r => r.value === role) || ROLES[0];

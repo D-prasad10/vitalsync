@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import PatientCard from '../components/PatientCard';
 import SensorGraph from '../components/SensorGraph';
+import { useRealtimeData } from '../utils/telemetryStore';
 
 const FieldBlock = ({ label, value, editing, name, onChange, type = 'text', children }) => (
   <div className="glass-panel" style={{ padding: '1rem', background: 'rgba(0,0,0,0.15)' }}>
@@ -20,7 +21,8 @@ const FieldBlock = ({ label, value, editing, name, onChange, type = 'text', chil
   </div>
 );
 
-const PatientDashboard = ({ socket, globalRealtimeData = {} }) => {
+const PatientDashboard = () => {
+  const globalRealtimeData = useRealtimeData();
   const [patients, setPatients] = useState([]);
   const [activePatient, setActivePatient] = useState(null);
   const [history, setHistory] = useState([]);
@@ -50,10 +52,11 @@ const PatientDashboard = ({ socket, globalRealtimeData = {} }) => {
   };
 
   useEffect(() => {
-    setFetchingPatients(true);
+    let mounted = true;
     fetch('http://localhost:5001/api/patients')
       .then(res => res.json())
       .then(data => {
+        if (!mounted) return;
         const list = Array.isArray(data) ? data : [];
         setPatients(list);
         if (list.length > 0) {
@@ -63,8 +66,10 @@ const PatientDashboard = ({ socket, globalRealtimeData = {} }) => {
       })
       .catch(err => {
         console.error('Failed to fetch patients:', err);
-        setFetchingPatients(false);
+        if (mounted) setFetchingPatients(false);
       });
+
+    return () => { mounted = false; };
   }, []);
 
   const handleEditChange = (e) => {
@@ -93,7 +98,7 @@ const PatientDashboard = ({ socket, globalRealtimeData = {} }) => {
         setPatients(patients.map(p => p.id === editFormData.id ? editFormData : p));
         setIsEditing(false);
       }
-    } catch (err) {
+    } catch {
       alert('Error updating profile');
     }
   };
@@ -109,23 +114,10 @@ const PatientDashboard = ({ socket, globalRealtimeData = {} }) => {
     );
   }, [patients, searchTerm]);
 
-  // Combine history + websocket live data for sensor graph
   const liveSensorPoints = useMemo(() => {
     if (!activePatient) return [];
-    const socketPoints = globalRealtimeData[activePatient.id] || [];
-    if (socketPoints.length > 0) {
-      const combined = [...history];
-      socketPoints.forEach(sp => {
-        const ts = sp.timestamp ? (typeof sp.timestamp === 'number' ? sp.timestamp : new Date(sp.timestamp).getTime()) : 0;
-        if (!combined.some(hp => {
-          const hts = hp.timestamp ? (typeof hp.timestamp === 'number' ? hp.timestamp : new Date(hp.timestamp).getTime()) : 0;
-          return Math.abs(hts - ts) < 500;
-        })) {
-          combined.push(sp);
-        }
-      });
-      return combined;
-    }
+    const live = globalRealtimeData[activePatient.id];
+    if (live && live.length > 0) return live;
     return history;
   }, [activePatient, globalRealtimeData, history]);
 

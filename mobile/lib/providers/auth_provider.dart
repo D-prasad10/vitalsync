@@ -13,8 +13,12 @@ class AuthProvider extends ChangeNotifier {
   String? get error => _error;
   bool get isAuthenticated => _currentUser != null;
 
-  AuthProvider() {
-    initAuthSession();
+  AuthProvider({bool autoInit = true}) {
+    if (autoInit) {
+      initAuthSession();
+    } else {
+      _isLoading = false;
+    }
   }
 
   Future<void> initAuthSession() async {

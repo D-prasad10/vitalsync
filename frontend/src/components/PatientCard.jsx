@@ -230,4 +230,4 @@ const PatientCard = ({
   );
 };
 
-export default PatientCard;
+export default React.memo(PatientCard);

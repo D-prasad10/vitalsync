@@ -1,7 +1,19 @@
 import React from 'react';
-import { HeartPulse, Menu, Bell, Shield, LogOut, Activity, User } from 'lucide-react';
+import { HeartPulse, Menu, Bell, LogOut, User } from 'lucide-react';
+import { useEmergencyAlerts } from '../utils/telemetryStore';
 
-const TopBar = ({ user, onLogout, alertsCount = 0, onToggleSidebar }) => {
+const TopBarAlertBadge = () => {
+  const { alerts } = useEmergencyAlerts();
+  if (!alerts.length) return null;
+  return (
+    <div className="alert-indicator" title={`${alerts.length} Active Emergency Alert(s)`}>
+      <Bell size={18} className="bell-icon-pulsing" />
+      <span className="alert-count-badge">{alerts.length}</span>
+    </div>
+  );
+};
+
+const TopBar = ({ user, onLogout, onToggleSidebar }) => {
   if (!user) return null;
 
   const roleLabel = user.role === 'doctor' ? 'Doctor' : user.role === 'caretaker' ? 'Caretaker' : user.role || 'Staff';
@@ -36,13 +48,7 @@ const TopBar = ({ user, onLogout, alertsCount = 0, onToggleSidebar }) => {
           <span className="telemetry-text">Live Telemetry</span>
         </div>
 
-        {/* Emergency Alert Indicator */}
-        {alertsCount > 0 && (
-          <div className="alert-indicator" title={`${alertsCount} Active Emergency Alert(s)`}>
-            <Bell size={18} className="bell-icon-pulsing" />
-            <span className="alert-count-badge">{alertsCount}</span>
-          </div>
-        )}
+        <TopBarAlertBadge />
 
         {/* User Profile Pill */}
         <div className="user-profile-pill">
@@ -69,4 +75,4 @@ const TopBar = ({ user, onLogout, alertsCount = 0, onToggleSidebar }) => {
   );
 };
 
-export default TopBar;
+export default React.memo(TopBar);

@@ -222,7 +222,7 @@ class _LoginScreenState extends State<LoginScreen> {
     return OutlinedButton.icon(
       style: OutlinedButton.styleFrom(
         side: BorderSide(color: isSelected ? color : AppTheme.glassBorder, width: isSelected ? 1.5 : 1),
-        backgroundColor: isSelected ? color.withOpacity(0.15) : Colors.transparent,
+        backgroundColor: isSelected ? color.withValues(alpha: 0.15) : Colors.transparent,
         padding: const EdgeInsets.symmetric(vertical: 12),
       ),
       onPressed: () => setState(() => _selectedRole = role),

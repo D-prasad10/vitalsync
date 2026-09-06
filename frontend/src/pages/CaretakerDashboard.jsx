@@ -3,8 +3,10 @@ import { Activity, ShieldAlert, PhoneCall, Stethoscope, Pencil, Check, X, User, 
 import SensorGraph from '../components/SensorGraph';
 import HealthScorePanel from '../components/HealthScorePanel';
 import PatientCard from '../components/PatientCard';
+import { useRealtimeData } from '../utils/telemetryStore';
 
-const CaretakerDashboard = ({ socket, globalRealtimeData = {} }) => {
+const CaretakerDashboard = () => {
+  const globalRealtimeData = useRealtimeData();
   const [patients, setPatients] = useState([]);
   const [activePatient, setActivePatient] = useState(null);
   const [history, setHistory] = useState([]);
@@ -13,18 +15,22 @@ const CaretakerDashboard = ({ socket, globalRealtimeData = {} }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let mounted = true;
     fetch('http://localhost:5001/api/patients')
       .then(res => res.json())
       .then(data => {
+        if (!mounted) return;
         const list = Array.isArray(data) ? data : [];
         setPatients(list);
         if (list.length > 0) selectPatient(list[0]);
         setLoading(false);
       })
-      .catch(() => setLoading(false));
+      .catch(() => { if (mounted) setLoading(false); });
+
+    return () => { mounted = false; };
   }, []);
 
-  const selectPatient = (p) => {
+  function selectPatient(p) {
     setActivePatient(p);
     setContactValues({
       guardian_contact: p.guardian_contact || '',
@@ -37,7 +43,7 @@ const CaretakerDashboard = ({ socket, globalRealtimeData = {} }) => {
       .then(res => res.json())
       .then(data => setHistory(Array.isArray(data) ? data : []))
       .catch(() => setHistory([]));
-  };
+  }
 
   const saveContact = async (field) => {
     if (!activePatient) return;

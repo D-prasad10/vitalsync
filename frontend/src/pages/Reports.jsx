@@ -18,10 +18,12 @@ const Reports = () => {
 
   // 1. Fetch Patients on Mount
   useEffect(() => {
+    let mounted = true;
     setLoadingPatients(true);
     fetch('http://localhost:5001/api/patients')
       .then(res => res.json())
       .then(data => {
+        if (!mounted) return;
         const list = Array.isArray(data) ? data : [];
         setPatients(list);
         if (list.length > 0) {
@@ -31,9 +33,12 @@ const Reports = () => {
       })
       .catch(err => {
         console.error('Error fetching patients:', err);
+        if (!mounted) return;
         setErrorMsg('Failed to load patient directory from backend server.');
         setLoadingPatients(false);
       });
+
+    return () => { mounted = false; };
   }, []);
 
   // 2. Selected Patient Object
@@ -43,6 +48,7 @@ const Reports = () => {
 
   // 3. Fetch Sensor History when Selected Patient changes
   useEffect(() => {
+    let mounted = true;
     if (!selectedPatient) {
       setHistory([]);
       return;
@@ -53,14 +59,18 @@ const Reports = () => {
     fetch(`http://localhost:5001/api/patients/${selectedPatient.id}/history`)
       .then(res => res.json())
       .then(data => {
+        if (!mounted) return;
         setHistory(Array.isArray(data) ? data : []);
         setLoadingHistory(false);
       })
       .catch(err => {
         console.error('Error fetching telemetry history:', err);
+        if (!mounted) return;
         setHistory([]);
         setLoadingHistory(false);
       });
+
+    return () => { mounted = false; };
   }, [selectedPatient]);
 
   // 4. Filter Patients for Directory Roster
@@ -582,7 +592,7 @@ const Reports = () => {
                       </td>
                     </tr>
                   ) : (
-                    [...filteredHistory].reverse().map((d, i) => {
+                    filteredHistory.slice(-50).reverse().map((d, i) => {
                       const dt = new Date(d.timestamp || Date.now());
                       const dateStr = dt.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' });
                       const timeStr = dt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -619,6 +629,11 @@ const Reports = () => {
                 </tbody>
               </table>
             </div>
+            {filteredHistory.length > 50 && (
+              <div style={{ textAlign: 'center', marginTop: '0.75rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                Showing latest 50 of {filteredHistory.length} readings. Use "Export Full Report (CSV)" for complete dataset.
+              </div>
+            )}
           </div>
 
         </div>

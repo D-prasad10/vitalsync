@@ -38,7 +38,7 @@ class HealthScorePanelWidget extends StatelessWidget {
                   child: CircularProgressIndicator(
                     value: score / 100.0,
                     strokeWidth: 8,
-                    backgroundColor: Colors.white.withOpacity(0.08),
+                    backgroundColor: Colors.white.withValues(alpha: 0.08),
                     color: color,
                   ),
                 ),

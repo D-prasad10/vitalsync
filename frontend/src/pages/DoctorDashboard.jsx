@@ -4,15 +4,18 @@ import SensorGraph from '../components/SensorGraph';
 import HistoryBarGraph from '../components/HistoryBarGraph';
 import HealthScorePanel from '../components/HealthScorePanel';
 import PatientCard from '../components/PatientCard';
+import { useRealtimeData } from '../utils/telemetryStore';
 
-const DoctorDashboard = ({ socket, globalRealtimeData = {}, isMuted, setIsMuted }) => {
+const DoctorDashboard = () => {
+  const globalRealtimeData = useRealtimeData();
+  const [isMuted, setIsMuted] = useState(false);
   const [patients, setPatients] = useState([]);
   const [activePatient, setActivePatient] = useState(null);
   const [history, setHistory] = useState([]);
-  const [groupedHistory, setGroupedHistory] = useState({});
-  const [selectedDate, setSelectedDate] = useState('');
+  const [_groupedHistory, setGroupedHistory] = useState({});
+  const [_selectedDate, setSelectedDate] = useState('');
   const [thresholds, setThresholds] = useState({});
-  const [loading, setLoading] = useState(false);
+  const [_loading, setLoading] = useState(false);
 
   // Search & Filter state
   const [searchTerm, setSearchTerm] = useState('');
@@ -40,12 +43,15 @@ const DoctorDashboard = ({ socket, globalRealtimeData = {}, isMuted, setIsMuted 
   });
 
   useEffect(() => {
+    let mounted = true;
     fetch('http://localhost:5001/api/patients')
       .then(res => res.json())
       .then(data => {
-        setPatients(Array.isArray(data) ? data : []);
+        if (mounted) setPatients(Array.isArray(data) ? data : []);
       })
       .catch(err => console.error('Failed to fetch patients:', err));
+
+    return () => { mounted = false; };
   }, []);
 
   const handleSelectPatient = (patient) => {
@@ -130,7 +136,7 @@ const DoctorDashboard = ({ socket, globalRealtimeData = {}, isMuted, setIsMuted 
         setIsAddModalOpen(false);
         setNewPatientForm({ name: '', age: '', gender: 'Not Specified', blood_group: '', weight: '', mobile: '', guardian_contact: '', room_number: '' });
       }
-    } catch (err) {
+    } catch {
       alert('Error registering patient');
     }
   };

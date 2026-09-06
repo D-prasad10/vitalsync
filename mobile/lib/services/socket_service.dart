@@ -13,6 +13,12 @@ class SocketService {
     required Function(VitalPoint) onSensorData,
     required Function(TelemetryAlert) onEmergencyAlert,
   }) {
+    if (_socket != null) {
+      _socket?.disconnect();
+      _socket?.dispose();
+      _socket = null;
+    }
+
     _socket = io.io(
       ApiConstants.socketUrl,
       io.OptionBuilder()
@@ -30,14 +36,16 @@ class SocketService {
     });
 
     _socket?.on('sensor_data', (data) {
-      if (data is Map<String, dynamic>) {
-        onSensorData(VitalPoint.fromJson(data));
+      if (data != null && data is Map) {
+        final map = Map<String, dynamic>.from(data);
+        onSensorData(VitalPoint.fromJson(map));
       }
     });
 
     _socket?.on('emergency_alert', (data) {
-      if (data is Map<String, dynamic>) {
-        onEmergencyAlert(TelemetryAlert.fromJson(data));
+      if (data != null && data is Map) {
+        final map = Map<String, dynamic>.from(data);
+        onEmergencyAlert(TelemetryAlert.fromJson(map));
       }
     });
 

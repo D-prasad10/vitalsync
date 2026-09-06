@@ -36,7 +36,7 @@ const Login = ({ onLogin }) => {
   const [otpError, setOtpError] = useState('');
   const [serverError, setServerError] = useState('');
 
-  const accentColor = role === 'caretaker' ? 'var(--success)' : 'var(--accent-primary)';
+  const accentColor = role === 'caretaker' ? 'var(--success)' : role === 'doctor' ? 'var(--accent-primary)' : 'var(--accent-secondary)';
 
   const validateCredentials = () => {
     const e = {};
@@ -54,6 +54,7 @@ const Login = ({ onLogin }) => {
   };
 
   const handleSendOtp = async () => {
+    console.log('[AUTH] Send OTP requested. Selected role:', role, 'Mobile:', form.phone, 'Email:', form.email);
     const e = validateCredentials();
     if (Object.keys(e).length) { setErrors(e); return; }
     setErrors({});
@@ -70,6 +71,7 @@ const Login = ({ onLogin }) => {
         })
       });
       const data = await res.json();
+      console.log('[AUTH] Send OTP response received:', data);
       if (!res.ok) {
         setServerError(data.error || 'Failed to send OTP.');
       } else {
@@ -80,7 +82,8 @@ const Login = ({ onLogin }) => {
           setServerError('⚠️ Dev mode: Email not configured. OTP auto-filled below.');
         }
       }
-    } catch {
+    } catch (err) {
+      console.error('[AUTH] Send OTP network error:', err);
       setServerError('Cannot connect to server. Make sure the backend is running.');
     } finally {
       setSending(false);
@@ -91,6 +94,7 @@ const Login = ({ onLogin }) => {
     if (otp.trim().length !== 6) return;
     setOtpError('');
     setVerifying(true);
+    console.log('[AUTH] Verify OTP started for mobile:', form.phone.trim(), 'OTP:', otp.trim());
     try {
       const res = await fetch(`${API}/api/auth/verify-otp`, {
         method: 'POST',
@@ -98,14 +102,47 @@ const Login = ({ onLogin }) => {
         body: JSON.stringify({ mobile: form.phone.trim(), otp: otp.trim() })
       });
       const data = await res.json();
+      console.log('[AUTH] Verify OTP API response:', data);
       if (!res.ok) {
         setOtpError(data.error || 'Verification failed.');
         setVerifying(false);
       } else {
-        onLogin({ role: data.user.role, name: data.user.name, staffId: data.user.staffId });
-        navigate(data.user.role === 'doctor' ? '/doctor' : '/caretaker');
+        const rawRole = (data.user && data.user.role) || role || 'staff';
+        const userRole = String(rawRole).toLowerCase().trim();
+        const userData = {
+          role: userRole,
+          name: (data.user && data.user.name) || form.email.split('@')[0],
+          staffId: (data.user && data.user.staffId) || (data.user && data.user.id) || '',
+          id: (data.user && data.user.id) || ''
+        };
+
+        // Determine destination route based on role
+        let targetRoute = '/patient-dashboard';
+        if (userRole === 'doctor') {
+          targetRoute = '/doctor';
+        } else if (userRole === 'caretaker') {
+          targetRoute = '/caretaker';
+        } else if (userRole === 'staff') {
+          targetRoute = '/staff';
+        } else if (userRole === 'patient') {
+          targetRoute = '/patient-dashboard';
+        }
+
+        console.log('[AUTH] Detected role:', userRole, '| Target route:', targetRoute, '| User data:', userData);
+
+        // Synchronously commit to localStorage FIRST so any route guards immediately see it
+        localStorage.setItem('vitals_user', JSON.stringify(userData));
+        console.log('[AUTH] Stored user in localStorage: vitals_user =', localStorage.getItem('vitals_user'));
+
+        // Update React state via callback
+        onLogin(userData);
+
+        // Immediate navigation to dashboard
+        console.log('[AUTH] Navigating immediately to target route:', targetRoute);
+        navigate(targetRoute, { replace: true });
       }
-    } catch {
+    } catch (err) {
+      console.error('[AUTH] Verify OTP network exception:', err);
       setOtpError('Cannot connect to server.');
       setVerifying(false);
     }
@@ -172,6 +209,8 @@ const Login = ({ onLogin }) => {
                   >
                     <option value="caretaker">Caretaker</option>
                     <option value="doctor">Doctor</option>
+                    <option value="patient">Patient</option>
+                    <option value="staff">Staff</option>
                   </select>
                 </div>
               </div>
@@ -189,6 +228,7 @@ const Login = ({ onLogin }) => {
                     onChange={e => setForm(f => ({ ...f, phone: e.target.value.replace(/\D/g, '') }))}
                     onFocus={e => e.target.style.borderColor = accentColor}
                     onBlur={e => e.target.style.borderColor = errors.phone ? 'var(--danger)' : 'var(--glass-border)'}
+                    onKeyDown={e => { if (e.key === 'Enter') handleSendOtp(); }}
                   />
                 </div>
                 {errors.phone && <p style={errorStyle}>{errors.phone}</p>}
@@ -207,6 +247,7 @@ const Login = ({ onLogin }) => {
                     onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
                     onFocus={e => e.target.style.borderColor = accentColor}
                     onBlur={e => e.target.style.borderColor = errors.email ? 'var(--danger)' : 'var(--glass-border)'}
+                    onKeyDown={e => { if (e.key === 'Enter') handleSendOtp(); }}
                   />
                 </div>
                 {errors.email && <p style={errorStyle}>{errors.email}</p>}
@@ -272,6 +313,7 @@ const Login = ({ onLogin }) => {
                   onChange={e => { setOtp(e.target.value.replace(/\D/g, '')); setOtpError(''); }}
                   onFocus={e => e.target.style.borderColor = accentColor}
                   onBlur={e => e.target.style.borderColor = otpError ? 'var(--danger)' : 'var(--glass-border)'}
+                  onKeyDown={e => { if (e.key === 'Enter' && otp.trim().length === 6 && !verifying) handleVerifyOtp(); }}
                 />
                 {otpError && <p style={{ ...errorStyle, marginBottom: '1rem' }}>{otpError}</p>}
 

@@ -7,6 +7,7 @@ import '../../providers/telemetry_provider.dart';
 import '../../widgets/sensor_graph_widget.dart';
 import '../../widgets/patient_card_widget.dart';
 import '../../widgets/health_score_panel_widget.dart';
+import '../../widgets/alert_toast_widget.dart';
 
 class DoctorDashboardScreen extends StatefulWidget {
   const DoctorDashboardScreen({super.key});
@@ -61,6 +62,22 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
             padding: const EdgeInsets.all(16.0),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
+                // Active Emergency Alerts Notification Section
+                if (telemetryProvider.alerts.isNotEmpty) ...[
+                  const Text(
+                    'CRITICAL TELEMETRY ALERTS',
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.danger, letterSpacing: 0.5),
+                  ),
+                  const SizedBox(height: 8),
+                  ...telemetryProvider.alerts.map(
+                    (alert) => AlertToastWidget(
+                      alert: alert,
+                      onDismiss: () => telemetryProvider.dismissAlert(alert.id),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+
                 // Patient Search Box
                 TextField(
                   onChanged: (val) => patientProvider.setSearchTerm(val),
@@ -129,9 +146,9 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                 decoration: BoxDecoration(
-                                  color: AppTheme.accentPrimary.withOpacity(0.15),
+                                  color: AppTheme.accentPrimary.withValues(alpha: 0.15),
                                   borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(color: AppTheme.accentPrimary.withOpacity(0.3)),
+                                  border: Border.all(color: AppTheme.accentPrimary.withValues(alpha: 0.3)),
                                 ),
                                 child: Text('Room ${selected.roomNumber ?? "N/A"}', style: const TextStyle(color: AppTheme.accentPrimary, fontWeight: FontWeight.bold)),
                               ),

@@ -20,6 +20,8 @@ ChartJS.register(
   Legend
 );
 
+ChartJS.defaults.animation = false;
+
 const HistoryBarGraph = ({
   title,
   dataPoints = [],
@@ -33,11 +35,12 @@ const HistoryBarGraph = ({
   // Process data points into 1-minute averaged buckets
   const chartData = useMemo(() => {
     if (!dataPoints || dataPoints.length === 0) return null;
+    const sourcePoints = dataPoints.length > 300 ? dataPoints.slice(-300) : dataPoints;
 
     const buckets = {};
-    dataPoints.forEach(pt => {
+    sourcePoints.forEach(pt => {
       if (!pt || pt[dataKey] === undefined) return;
-      const date = new Date(pt.timestamp || Date.now());
+      const date = new Date(pt.timestamp || 0);
       const bucketDate = new Date(date);
       bucketDate.setSeconds(0, 0);
 
@@ -80,9 +83,10 @@ const HistoryBarGraph = ({
     };
   }, [dataPoints, dataKey, color, title]);
 
-  const options = {
+  const options = useMemo(() => ({
     responsive: true,
     maintainAspectRatio: false,
+    animation: false,
     color: '#f8f9fa',
     layout: {
       padding: {
@@ -131,7 +135,7 @@ const HistoryBarGraph = ({
         }
       }
     }
-  };
+  }), [yMin, yMax, color, unit]);
 
   return (
     <div className="history-bar-card glass-panel" style={{ padding: '1.25rem', width: '100%', minWidth: 0 }}>
@@ -159,11 +163,12 @@ const HistoryBarGraph = ({
             <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Sensor history will accumulate over time</span>
           </div>
         ) : (
-          <Bar options={options} data={chartData} />
+          <Bar options={options} data={chartData} redraw={false} />
         )}
       </div>
     </div>
   );
 };
 
-export default HistoryBarGraph;
+export default React.memo(HistoryBarGraph);
+

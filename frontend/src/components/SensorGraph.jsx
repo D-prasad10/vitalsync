@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -24,7 +24,18 @@ ChartJS.register(
   Filler
 );
 
-// Helper to extract metric value with fallbacks
+ChartJS.defaults.animation = false;
+ChartJS.defaults.responsive = true;
+ChartJS.defaults.maintainAspectRatio = false;
+
+const downsample = (points, max = 48) => {
+  if (!Array.isArray(points) || points.length <= max) return points || [];
+  const step = (points.length - 1) / (max - 1);
+  const out = new Array(max);
+  for (let i = 0; i < max; i++) out[i] = points[Math.round(i * step)];
+  return out;
+};
+
 const getValue = (d, key, fallbackKey) => {
   if (!d) return null;
   if (key && d[key] !== undefined && d[key] !== null) return d[key];
@@ -56,8 +67,9 @@ const SensorGraph = ({
   maxTicksLimit,
   datasets = null // Optional array of { label, dataKey, fallbackKey, color }
 }) => {
-  const hasData = Array.isArray(dataPoints) && dataPoints.length > 0;
-  const latestPoint = hasData ? dataPoints[dataPoints.length - 1] : null;
+  const sampledPoints = useMemo(() => downsample(dataPoints, 48), [dataPoints]);
+  const hasData = sampledPoints.length > 0;
+  const latestPoint = hasData ? sampledPoints[sampledPoints.length - 1] : null;
 
   // Formatted display value
   let formattedValue = '--';
@@ -75,53 +87,59 @@ const SensorGraph = ({
   }
 
   // Generate X-axis labels
-  const labels = hasData
-    ? dataPoints.map(d => {
-        const date = new Date(d.timestamp || Date.now());
-        if (dateFormat === 'datetime') {
-          const day = date.getDate().toString().padStart(2, '0');
-          const month = date.toLocaleString('en-US', { month: 'short' });
-          const timeStr = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-          return `${day} ${month}, ${timeStr}`;
-        }
-        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-      })
-    : [];
+  const labels = useMemo(() => {
+    return hasData
+      ? sampledPoints.map(d => {
+          const date = new Date(d.timestamp || 0);
+          if (dateFormat === 'datetime') {
+            const day = date.getDate().toString().padStart(2, '0');
+            const month = date.toLocaleString('en-US', { month: 'short' });
+            const timeStr = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+            return `${day} ${month}, ${timeStr}`;
+          }
+          return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        })
+      : [];
+  }, [hasData, sampledPoints, dateFormat]);
 
-  // Chart datasets configuration
-  const chartDatasets = datasets && datasets.length > 0
-    ? datasets.map(ds => ({
-        label: ds.label || title,
-        data: hasData ? dataPoints.map(d => getValue(d, ds.dataKey, ds.fallbackKey)) : [],
-        borderColor: ds.color || color,
-        backgroundColor: `${ds.color || color}18`,
-        fill: ds.fill ?? false,
-        tension: 0.35,
-        borderWidth: 2,
-        pointRadius: hasData && dataPoints.length < 20 ? 3 : 0,
-        pointHoverRadius: 5,
-        pointBackgroundColor: ds.color || color
-      }))
-    : [
-        {
-          label: title,
-          data: hasData ? dataPoints.map(d => getValue(d, dataKey)) : [],
-          borderColor: color,
-          backgroundColor: `${color}22`,
-          fill: true,
+  const chartDatasets = useMemo(() => {
+    return datasets && datasets.length > 0
+      ? datasets.map(ds => ({
+          label: ds.label || title,
+          data: hasData ? sampledPoints.map(d => getValue(d, ds.dataKey, ds.fallbackKey)) : [],
+          borderColor: ds.color || color,
+          backgroundColor: `${ds.color || color}18`,
+          fill: ds.fill ?? false,
           tension: 0.35,
           borderWidth: 2,
-          pointRadius: hasData && dataPoints.length < 20 ? 3 : 0,
+          pointRadius: hasData && sampledPoints.length < 20 ? 3 : 0,
           pointHoverRadius: 5,
-          pointBackgroundColor: color
-        }
-      ];
+          pointBackgroundColor: ds.color || color
+        }))
+      : [
+          {
+            label: title,
+            data: hasData ? sampledPoints.map(d => getValue(d, dataKey)) : [],
+            borderColor: color,
+            backgroundColor: `${color}22`,
+            fill: true,
+            tension: 0.35,
+            borderWidth: 2,
+            pointRadius: hasData && sampledPoints.length < 20 ? 3 : 0,
+            pointHoverRadius: 5,
+            pointBackgroundColor: color
+          }
+        ];
+  }, [datasets, title, hasData, sampledPoints, color, dataKey]);
 
-  const chartData = { labels, datasets: chartDatasets };
+  const chartData = useMemo(() => ({ labels, datasets: chartDatasets }), [labels, chartDatasets]);
 
-  const options = {
+  const hasMultipleDatasets = Boolean(datasets && datasets.length > 1);
+
+  const options = useMemo(() => ({
     responsive: true,
     maintainAspectRatio: false,
+    animation: false,
     color: '#f8f9fa',
     layout: {
       padding: {
@@ -158,7 +176,7 @@ const SensorGraph = ({
     },
     plugins: {
       legend: {
-        display: datasets && datasets.length > 1,
+        display: hasMultipleDatasets,
         position: 'top',
         align: 'end',
         labels: {
@@ -169,8 +187,10 @@ const SensorGraph = ({
         }
       },
       tooltip: {
+        enabled: true,
         mode: 'index',
         intersect: false,
+        animation: false,
         backgroundColor: 'rgba(11, 13, 20, 0.95)',
         titleColor: '#ffffff',
         bodyColor: '#cbd5e1',
@@ -178,19 +198,6 @@ const SensorGraph = ({
         borderWidth: 1,
         padding: 10,
         callbacks: {
-          title: (items) => {
-            if (!items || items.length === 0) return '';
-            const idx = items[0].dataIndex;
-            const pt = dataPoints[idx];
-            if (pt && pt.timestamp) {
-              const date = new Date(pt.timestamp);
-              return date.toLocaleString('en-US', {
-                day: '2-digit', month: 'short', year: 'numeric',
-                hour: '2-digit', minute: '2-digit', second: '2-digit'
-              });
-            }
-            return items[0].label;
-          },
           label: (item) => {
             const val = item.raw;
             return `${item.dataset.label}: ${val !== null && val !== undefined ? val : '--'} ${unit}`;
@@ -198,7 +205,7 @@ const SensorGraph = ({
         }
       }
     }
-  };
+  }), [yMin, yMax, maxTicksLimit, dateFormat, hasMultipleDatasets, unit]);
 
   return (
     <div className="sensor-graph-card glass-panel" style={{ padding: '1.25rem', width: '100%', minWidth: 0 }}>
@@ -236,12 +243,13 @@ const SensorGraph = ({
             <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Waiting for live device stream...</span>
           </div>
         ) : (
-          <Line options={options} data={chartData} />
+          <Line options={options} data={chartData} redraw={false} />
         )}
       </div>
     </div>
   );
 };
 
-export default SensorGraph;
+export default React.memo(SensorGraph);
+
 

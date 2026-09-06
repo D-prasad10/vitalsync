@@ -26,11 +26,11 @@ class PatientCardWidget extends StatelessWidget {
     if (status == 'Warning') statusColor = AppTheme.warning;
 
     return Card(
-      color: isSelected ? AppTheme.accentPrimary.withOpacity(0.08) : AppTheme.bgPanelSolid,
+      color: isSelected ? AppTheme.accentPrimary.withValues(alpha: 0.08) : AppTheme.bgPanelSolid,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(
-          color: isSelected ? AppTheme.accentPrimary : statusColor.withOpacity(0.4),
+          color: isSelected ? AppTheme.accentPrimary : statusColor.withValues(alpha: 0.4),
           width: isSelected ? 1.5 : 1,
         ),
       ),
@@ -49,8 +49,8 @@ class PatientCardWidget extends StatelessWidget {
                     radius: 20,
                     backgroundColor: AppTheme.accentSecondary,
                     child: Text(
-                      patient.name.isNotEmpty
-                          ? patient.name.split(' ').map((e) => e[0]).take(2).join().toUpperCase()
+                      patient.name.trim().isNotEmpty
+                          ? patient.name.trim().split(RegExp(r'\s+')).where((e) => e.isNotEmpty).map((e) => e[0]).take(2).join().toUpperCase()
                           : 'PT',
                       style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                     ),
@@ -81,9 +81,9 @@ class PatientCardWidget extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: statusColor.withOpacity(0.15),
+                      color: statusColor.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: statusColor.withOpacity(0.3)),
+                      border: Border.all(color: statusColor.withValues(alpha: 0.3)),
                     ),
                     child: Text(
                       status,

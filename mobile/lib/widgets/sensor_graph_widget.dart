@@ -40,6 +40,10 @@ class SensorGraphWidget extends StatelessWidget {
       }
     }
 
+    final primarySpots = _getSpots(dataPoints, metricType == 'bp' ? 'bpSys' : metricType);
+    final secondarySpots = metricType == 'bp' ? _getSpots(dataPoints, 'bpDia') : <FlSpot>[];
+    final hasSpots = primarySpots.isNotEmpty || secondarySpots.isNotEmpty;
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(14.0),
@@ -76,9 +80,9 @@ class SensorGraphWidget extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
-                      color: AppTheme.success.withOpacity(0.15),
+                      color: AppTheme.success.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppTheme.success.withOpacity(0.3)),
+                      border: Border.all(color: AppTheme.success.withValues(alpha: 0.3)),
                     ),
                     child: const Row(
                       mainAxisSize: MainAxisSize.min,
@@ -97,8 +101,8 @@ class SensorGraphWidget extends StatelessWidget {
             const SizedBox(height: 12),
             SizedBox(
               height: height,
-              child: !hasData
-                  ? Center(
+              child: (!hasData || !hasSpots)
+                  ? const Center(
                       child: Text(
                         'No Telemetry Data Available',
                         style: TextStyle(color: AppTheme.textMuted, fontSize: 12),
@@ -110,7 +114,7 @@ class SensorGraphWidget extends StatelessWidget {
                           show: true,
                           drawVerticalLine: false,
                           getDrawingHorizontalLine: (val) => FlLine(
-                            color: Colors.white.withOpacity(0.05),
+                            color: Colors.white.withValues(alpha: 0.05),
                             strokeWidth: 1,
                           ),
                         ),
@@ -150,7 +154,7 @@ class SensorGraphWidget extends StatelessWidget {
                         lineBarsData: metricType == 'bp'
                             ? [
                                 LineChartBarData(
-                                  spots: _getSpots(dataPoints, 'bpSys'),
+                                  spots: primarySpots,
                                   isCurved: true,
                                   color: AppTheme.warning,
                                   barWidth: 2,
@@ -158,7 +162,7 @@ class SensorGraphWidget extends StatelessWidget {
                                   dotData: const FlDotData(show: false),
                                 ),
                                 LineChartBarData(
-                                  spots: _getSpots(dataPoints, 'bpDia'),
+                                  spots: secondarySpots,
                                   isCurved: true,
                                   color: AppTheme.accentSecondary,
                                   barWidth: 2,
@@ -168,14 +172,14 @@ class SensorGraphWidget extends StatelessWidget {
                               ]
                             : [
                                 LineChartBarData(
-                                  spots: _getSpots(dataPoints, metricType),
+                                  spots: primarySpots,
                                   isCurved: true,
                                   color: color,
                                   barWidth: 2,
                                   isStrokeCapRound: true,
                                   belowBarData: BarAreaData(
                                     show: true,
-                                    color: color.withOpacity(0.12),
+                                    color: color.withValues(alpha: 0.12),
                                   ),
                                   dotData: const FlDotData(show: false),
                                 ),

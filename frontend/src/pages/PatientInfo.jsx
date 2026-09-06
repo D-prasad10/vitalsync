@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { User, Phone, MapPin, Activity, ShieldAlert, Users } from 'lucide-react';
 
 const DetailRow = ({ label, value }) => (
@@ -11,21 +11,41 @@ const DetailRow = ({ label, value }) => (
 
 const PatientInfo = () => {
   const { id: urlId } = useParams();
+  const navigate = useNavigate();
   const [patients, setPatients] = useState([]);
-  const [selectedPatient, setSelectedPatient] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let mounted = true;
     fetch('http://localhost:5001/api/patients')
       .then(res => res.json())
       .then(data => {
-        setPatients(data);
-        const initial = urlId ? data.find(p => String(p.id) === String(urlId)) : null;
-        setSelectedPatient(initial || data[0] || null);
+        if (!mounted) return;
+        const list = Array.isArray(data) ? data : [];
+        setPatients(list);
         setLoading(false);
       })
-      .catch(() => setLoading(false));
-  }, [urlId]);
+      .catch(err => {
+        console.error('Failed to load patients in PatientInfo:', err);
+        if (mounted) setLoading(false);
+      });
+
+    return () => { mounted = false; };
+  }, []);
+
+  const selectedPatient = (() => {
+    if (patients.length === 0) return null;
+    const match = urlId
+      ? patients.find(p => String(p.id) === String(urlId) || String(p.patient_id || '') === String(urlId) || String(urlId).replace('PT-', '') === String(p.id))
+      : null;
+    return match || patients[0] || null;
+  })();
+
+  const handleSelectPatient = (p) => {
+    if (p && p.id) {
+      navigate(`/patient/${p.id}`);
+    }
+  };
 
   if (loading) {
     return <div style={{ textAlign: 'center', padding: '4rem', color: 'var(--text-secondary)' }}>Loading patients...</div>;
@@ -49,7 +69,7 @@ const PatientInfo = () => {
             {patients.map(p => (
               <button
                 key={p.id}
-                onClick={() => setSelectedPatient(p)}
+                onClick={() => handleSelectPatient(p)}
                 style={{
                   padding: '0.875rem 1rem',
                   borderRadius: '10px',
