@@ -364,7 +364,7 @@ const Reports = () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1.5rem', borderBottom: '1px solid var(--glass-border)', paddingBottom: '1.25rem', marginBottom: '1.25rem' }}>
               <div>
                 <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--accent-primary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.25rem' }}>
-                  VitalsSync Medical Telemetry Systems
+                  SWASTHYAEDGE Medical Telemetry Systems
                 </div>
                 <h2 style={{ fontSize: '1.5rem', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
                   Clinical Health & Vitals Trend Report

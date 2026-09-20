@@ -35,8 +35,7 @@ const TopBar = ({ user, onLogout, onToggleSidebar }) => {
             <HeartPulse size={24} color="var(--accent-primary)" />
           </div>
           <div className="brand-text">
-            <span className="brand-title">VoltVertex</span>
-            <span className="brand-subtitle">VitalsSync</span>
+            <span className="brand-title">SWASTHYAEDGE</span>
           </div>
         </div>
       </div>

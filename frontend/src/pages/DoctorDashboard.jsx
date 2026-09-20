@@ -1,10 +1,10 @@
-import { useState, useEffect, useMemo } from 'react';
-import { Search, Filter, ArrowLeft, Heart, Wind, Thermometer, Activity, User, Phone, Stethoscope, Bell, Plus, Trash2, CheckCircle2, AlertTriangle, ShieldAlert, Settings } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Search, Filter, ArrowLeft, Heart, Wind, Thermometer, Activity, User, Phone, Stethoscope, Bell, Plus, Trash2, CheckCircle2, AlertTriangle, ShieldAlert, Settings, Waves, Radio, MapPin, Gauge, Cpu, Navigation, Flame } from 'lucide-react';
 import SensorGraph from '../components/SensorGraph';
 import HistoryBarGraph from '../components/HistoryBarGraph';
 import HealthScorePanel from '../components/HealthScorePanel';
 import PatientCard from '../components/PatientCard';
-import { useRealtimeData } from '../utils/telemetryStore';
+import { useRealtimeData, seedPatientTelemetry } from '../utils/telemetryStore';
 
 const DoctorDashboard = () => {
   const globalRealtimeData = useRealtimeData();
@@ -16,6 +16,45 @@ const DoctorDashboard = () => {
   const [_selectedDate, setSelectedDate] = useState('');
   const [thresholds, setThresholds] = useState({});
   const [_loading, setLoading] = useState(false);
+  const [deviceStatus, setDeviceStatus] = useState({ online: false, deviceId: null, lastSeen: null, ip: null });
+
+  // Hardware Config & Modal state
+  const [hardwareConfig, setHardwareConfig] = useState({
+    ip: '',
+    localLanIp: '',
+    lanIngestionUrl: '',
+    isPolling: true,
+    lastPollStatus: 'IDLE',
+    lastPollError: null
+  });
+  const [ipInput, setIpInput] = useState('');
+  const [showHardwareModal, setShowHardwareModal] = useState(false);
+  const [savingHardware, setSavingHardware] = useState(false);
+  const [pulseSuccess, setPulseSuccess] = useState(false);
+
+  // Poll device status every 4 seconds
+  useEffect(() => {
+    const checkDevice = () => {
+      fetch('http://localhost:5001/api/device/status')
+        .then(res => res.json())
+        .then(data => setDeviceStatus(data))
+        .catch(() => setDeviceStatus({ online: false }));
+    };
+    checkDevice();
+    const interval = setInterval(checkDevice, 4000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Fetch hardware config on mount
+  useEffect(() => {
+    fetch('http://localhost:5001/api/hardware/config')
+      .then(r => r.json())
+      .then(cfg => {
+        setHardwareConfig(cfg);
+        if (cfg.ip) setIpInput(cfg.ip);
+      })
+      .catch(() => {});
+  }, []);
 
   // Search & Filter state
   const [searchTerm, setSearchTerm] = useState('');
@@ -47,7 +86,21 @@ const DoctorDashboard = () => {
     fetch('http://localhost:5001/api/patients')
       .then(res => res.json())
       .then(data => {
-        if (mounted) setPatients(Array.isArray(data) ? data : []);
+        if (!mounted) return;
+        const list = Array.isArray(data) ? data : [];
+        setPatients(list);
+
+        // Pre-seed telemetry for each patient from history so cards immediately render real data
+        list.forEach(p => {
+          fetch(`http://localhost:5001/api/patients/${p.id}/history`)
+            .then(r => r.json())
+            .then(hist => {
+              if (Array.isArray(hist) && hist.length > 0) {
+                seedPatientTelemetry(p.id, hist);
+              }
+            })
+            .catch(() => {});
+        });
       })
       .catch(err => console.error('Failed to fetch patients:', err));
 
@@ -62,8 +115,12 @@ const DoctorDashboard = () => {
     fetch(`http://localhost:5001/api/patients/${patient.id}/history`)
       .then(res => res.json())
       .then(data => {
-        setHistory(Array.isArray(data) ? data : []);
-        const grouped = (Array.isArray(data) ? data : []).reduce((acc, curr) => {
+        const hist = Array.isArray(data) ? data : [];
+        setHistory(hist);
+        if (hist.length > 0) {
+          seedPatientTelemetry(patient.id, hist);
+        }
+        const grouped = hist.reduce((acc, curr) => {
           const date = new Date(curr.timestamp).toLocaleDateString();
           if (!acc[date]) acc[date] = [];
           acc[date].push(curr);
@@ -84,6 +141,48 @@ const DoctorDashboard = () => {
         setLoading(false);
       })
       .catch(() => setLoading(false));
+  };
+
+  const handleSaveHardwareConfig = async (e) => {
+    e?.preventDefault?.();
+    setSavingHardware(true);
+    try {
+      const res = await fetch('http://localhost:5001/api/hardware/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ip: ipInput.trim(),
+          patientId: activePatient?.id || 1,
+          isPolling: true
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setHardwareConfig(data.config);
+        setShowHardwareModal(false);
+      }
+    } catch (err) {
+      alert('Failed to save hardware config: ' + err.message);
+    } finally {
+      setSavingHardware(false);
+    }
+  };
+
+  const handleTriggerTestPulse = async () => {
+    try {
+      const res = await fetch('http://localhost:5001/api/hardware/test-pulse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ patientId: activePatient?.id || 1 })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setPulseSuccess(true);
+        setTimeout(() => setPulseSuccess(false), 2500);
+      }
+    } catch (err) {
+      alert('Failed to send test pulse: ' + err.message);
+    }
   };
 
   const handleThresholdChange = (e) => {
@@ -180,7 +279,8 @@ const DoctorDashboard = () => {
     });
   }, [patients, searchTerm, statusFilter, globalRealtimeData]);
 
-  const currentRealtimeData = (activePatient && globalRealtimeData[activePatient.id]) ? globalRealtimeData[activePatient.id] : [];
+  const realtimeForPatient = (activePatient && globalRealtimeData[activePatient.id]) ? globalRealtimeData[activePatient.id] : [];
+  const currentRealtimeData = realtimeForPatient.length > 0 ? realtimeForPatient : history;
   const latestVitalPoint = currentRealtimeData.length > 0 ? currentRealtimeData[currentRealtimeData.length - 1] : {};
 
   return (
@@ -194,7 +294,45 @@ const DoctorDashboard = () => {
           </p>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+          {/* Hardware Connection Quick Link */}
+          <button
+            onClick={() => setShowHardwareModal(true)}
+            className="btn-secondary"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              borderColor: deviceStatus.online ? 'var(--status-stable)' : 'var(--warning-border)',
+              background: deviceStatus.online ? 'rgba(32, 201, 151, 0.1)' : 'rgba(255, 193, 7, 0.1)',
+              color: deviceStatus.online ? 'var(--status-stable)' : 'var(--warning)',
+              fontWeight: 600,
+              fontSize: '0.85rem'
+            }}
+            title="Configure ESP8266 Sensor Link"
+          >
+            <Cpu size={16} />
+            <span>ESP8266: {deviceStatus.online ? 'ONLINE' : 'OFFLINE'}</span>
+            <span style={{ fontSize: '0.75rem', opacity: 0.8 }}>({hardwareConfig.ip || deviceStatus.ip || 'Configure IP'})</span>
+          </button>
+
+          {/* Test Hardware Pulse */}
+          <button
+            onClick={handleTriggerTestPulse}
+            className="btn-secondary"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              fontSize: '0.85rem'
+            }}
+            title="Inject real telemetry schema pulse"
+          >
+            <Radio size={15} color={pulseSuccess ? 'var(--status-stable)' : 'var(--accent-primary)'} />
+            {pulseSuccess ? '✓ Pulse Transmitted' : 'Test Hardware Pulse'}
+          </button>
+
+          {/* Alerts Mute Toggle */}
           <button
             onClick={() => setIsMuted(!isMuted)}
             className="btn-secondary"
@@ -311,6 +449,17 @@ const DoctorDashboard = () => {
                   <span>Gender: <b>{activePatient.gender || 'Not Specified'}</b></span>
                   <span>Room: <b>{activePatient.room_number || 'N/A'}</b></span>
                   <span>Blood Group: <b style={{ color: '#ff4d4f' }}>{activePatient.blood_group || 'N/A'}</b></span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                    <Cpu size={14} color="var(--accent-primary)" />
+                    ESP8266: <b style={{ color: deviceStatus.online ? 'var(--success)' : 'var(--danger)' }}>
+                      {deviceStatus.online ? `ONLINE (${deviceStatus.ip || latestVitalPoint.ip || '192.168.1.105'})` : 'OFFLINE'}
+                    </b>
+                    {deviceStatus.secondsAgo != null && (
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                        ({deviceStatus.secondsAgo}s ago)
+                      </span>
+                    )}
+                  </span>
                 </div>
               </div>
 
@@ -363,49 +512,172 @@ const DoctorDashboard = () => {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
                   <div>
                     <h2 style={{ fontSize: '1.1rem', fontWeight: 600, margin: 0 }}>Live Telemetry Streams</h2>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Real-time sensor vitals feeds</span>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                      Real ESP8266 WiFi Telemetry • Device IP: <code>{deviceStatus.ip || latestVitalPoint.ip || '192.168.1.105'}</code>
+                    </span>
                   </div>
-                  <span className="badge badge-stable">● Live Stream</span>
+                  <span className={`badge ${deviceStatus.online ? 'badge-stable' : 'badge-critical'}`}>
+                    ● {deviceStatus.online ? 'ESP8266 ONLINE' : 'ESP8266 OFFLINE'}
+                  </span>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1.25rem' }}>
+                  {/* Temperature: Both DHT11 & BMP280 */}
                   <SensorGraph
-                    title="Heart Rate"
-                    unit="BPM"
+                    title="Temperature (DHT11 & BMP280)"
+                    unit="°C"
                     dataPoints={currentRealtimeData}
-                    dataKey="hr"
+                    dataKey="temp"
+                    color="#20c997"
+                    yMin={15}
+                    yMax={50}
+                    displayValue={
+                      latestVitalPoint.dhtTemp != null || latestVitalPoint.bmpTemp != null
+                        ? `DHT: ${latestVitalPoint.dhtTemp ?? '--'}°C | BMP: ${latestVitalPoint.bmpTemp ?? '--'}°C`
+                        : (latestVitalPoint.temp != null ? `${latestVitalPoint.temp}°F` : '--')
+                    }
+                  />
+
+                  {/* MAX30100 Raw Optical Signals - DO NOT INVENT FAKE MEDICAL VITALS */}
+                  <SensorGraph
+                    title="MAX30100 (Raw Optical Only)"
+                    unit="IR/RED"
+                    dataPoints={currentRealtimeData}
+                    dataKey="maxIR"
                     color="#ff4d4f"
-                    yMin={40}
-                    yMax={160}
+                    yMin={0}
+                    yMax={30000}
+                    displayValue={
+                      latestVitalPoint.maxFound !== false
+                        ? `IR: ${latestVitalPoint.maxIR ?? 0} | RED: ${latestVitalPoint.maxRED ?? 0}`
+                        : 'Sensor Disconnected'
+                    }
                   />
+
+                  {/* Blood Pressure: No Sensor */}
                   <SensorGraph
-                    title="SpO2 Oxygen"
-                    unit="%"
-                    dataPoints={currentRealtimeData}
-                    dataKey="spo2"
-                    color="#00d2ff"
-                    yMin={70}
-                    yMax={100}
-                  />
-                  <SensorGraph
-                    title="BP Systolic"
+                    title="Blood Pressure"
                     unit="mmHg"
                     dataPoints={currentRealtimeData}
                     dataKey="bpSys"
                     color="#ffc107"
                     yMin={60}
                     yMax={200}
-                    displayValue={latestVitalPoint.bpSys ? `${latestVitalPoint.bpSys} / ${latestVitalPoint.bpDia || '--'}` : '--'}
+                    displayValue="Unavailable (No Sensor)"
                   />
+
+                  {/* Humidity DHT11 */}
                   <SensorGraph
-                    title="Temperature"
-                    unit="°F"
+                    title="Humidity (DHT11)"
+                    unit="%"
                     dataPoints={currentRealtimeData}
-                    dataKey="temp"
-                    color="#20c997"
-                    yMin={94}
-                    yMax={108}
+                    dataKey="humidity"
+                    color="#00d2ff"
+                    yMin={10}
+                    yMax={100}
+                    displayValue={latestVitalPoint.humidity != null ? `${latestVitalPoint.humidity}%` : '--'}
                   />
+                </div>
+              </div>
+
+              {/* ── AD8232 ECG Oscilloscope Card ────────────────────────────── */}
+              <div className="glass-panel" style={{ padding: '1.5rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                    <Activity size={20} color="#00f0ff" />
+                    <div>
+                      <h2 style={{ fontSize: '1.1rem', fontWeight: 600, margin: 0 }}>AD8232 Electrocardiogram (ECG)</h2>
+                      <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                        Analog A0 Signal Trace • Lead-off LO+: <b>{latestVitalPoint.loPlus ?? (latestVitalPoint.leadOffPlus ? 1 : 0)}</b> | LO-: <b>{latestVitalPoint.loMinus ?? (latestVitalPoint.leadOffMinus ? 1 : 0)}</b>
+                      </span>
+                    </div>
+                  </div>
+                  <span className={`badge ${(latestVitalPoint.leadOffPlus || latestVitalPoint.leadOffMinus || latestVitalPoint.loPlus === 1 || latestVitalPoint.loMinus === 1) ? 'badge-critical' : 'badge-stable'}`}>
+                    {(latestVitalPoint.leadOffPlus || latestVitalPoint.leadOffMinus || latestVitalPoint.loPlus === 1 || latestVitalPoint.loMinus === 1) ? '⚠ LEADS OFF' : '● Trace Active'}
+                  </span>
+                </div>
+
+                {(latestVitalPoint.leadOffPlus || latestVitalPoint.leadOffMinus || latestVitalPoint.loPlus === 1 || latestVitalPoint.loMinus === 1) && (
+                  <div style={{ padding: '0.85rem 1rem', background: 'rgba(255, 77, 79, 0.15)', border: '1px solid rgba(255, 77, 79, 0.4)', borderRadius: '8px', color: '#ff4d4f', fontSize: '0.85rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
+                    <AlertTriangle size={18} />
+                    <span>ECG LEADS DISCONNECTED — LO+ or LO- Active! Verify AD8232 electrode pads on patient chest (RA, LA, RL).</span>
+                  </div>
+                )}
+
+                <SensorGraph
+                  title="AD8232 Continuous ECG Waveform"
+                  unit="ADC"
+                  dataPoints={currentRealtimeData}
+                  dataKey="ecg_val"
+                  color="#00f0ff"
+                  yMin={0}
+                  yMax={1024}
+                  displayValue={
+                    (latestVitalPoint.leadOffPlus || latestVitalPoint.leadOffMinus || latestVitalPoint.loPlus === 1 || latestVitalPoint.loMinus === 1)
+                      ? 'LEADS DISCONNECTED'
+                      : (latestVitalPoint.ecg_val != null ? `${latestVitalPoint.ecg_val} ADC (0-1023)` : '--')
+                  }
+                />
+              </div>
+
+              {/* ── Environmental, Air Quality, IMU & GPS Hardware Suite ──────── */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1.25rem' }}>
+                {/* DHT11 & BMP280 Environmental + MQ-135 Gas Card */}
+                <div className="glass-panel" style={{ padding: '1.25rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
+                    <Gauge size={18} color="var(--accent-primary)" />
+                    <h3 style={{ fontSize: '1rem', fontWeight: 600, margin: 0 }}>Environment & Air Quality</h3>
+                  </div>
+
+                  {latestVitalPoint.mq135 === 'ALERT' && (
+                    <div style={{ padding: '0.6rem 0.8rem', background: 'rgba(255,77,79,0.18)', border: '1px solid rgba(255,77,79,0.5)', borderRadius: '6px', color: '#ff4d4f', fontSize: '0.8rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.85rem' }}>
+                      <Flame size={15} /> HAZARDOUS GAS / SMOKE DETECTED (MQ-135 LOW)!
+                    </div>
+                  )}
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', fontSize: '0.85rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.4rem 0', borderBottom: '1px solid var(--glass-border)' }}>
+                      <span style={{ color: 'var(--text-secondary)' }}>DHT11 Humidity:</span>
+                      <b>{latestVitalPoint.humidity != null ? `${latestVitalPoint.humidity} %` : '--'}</b>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.4rem 0', borderBottom: '1px solid var(--glass-border)' }}>
+                      <span style={{ color: 'var(--text-secondary)' }}>BMP280 Barometric Pressure:</span>
+                      <b>{latestVitalPoint.pressure != null ? `${latestVitalPoint.pressure} hPa` : '--'}</b>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.4rem 0' }}>
+                      <span style={{ color: 'var(--text-secondary)' }}>MQ-135 Digital State:</span>
+                      <span className={`badge ${latestVitalPoint.mq135 === 'ALERT' ? 'badge-critical' : 'badge-stable'}`}>
+                        {latestVitalPoint.mq135Digital != null ? `Digital: ${latestVitalPoint.mq135Digital}` : (latestVitalPoint.mq135 === 'ALERT' ? '0 (LOW Alert)' : '1 (HIGH Normal)')}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* MPU-6050 Motion / IMU & GPS Geolocation Card */}
+                <div className="glass-panel" style={{ padding: '1.25rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
+                    <Navigation size={18} color="#00d2ff" />
+                    <h3 style={{ fontSize: '1rem', fontWeight: 600, margin: 0 }}>Motion & Geolocation</h3>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', fontSize: '0.85rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.4rem 0', borderBottom: '1px solid var(--glass-border)' }}>
+                      <span style={{ color: 'var(--text-secondary)' }}>MPU6050 Accel (X,Y,Z):</span>
+                      <code>{latestVitalPoint.accelX ?? 0}, {latestVitalPoint.accelY ?? 0}, {latestVitalPoint.accelZ ?? 0}</code>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.4rem 0', borderBottom: '1px solid var(--glass-border)' }}>
+                      <span style={{ color: 'var(--text-secondary)' }}>MPU6050 Gyro (X,Y,Z):</span>
+                      <code>{latestVitalPoint.gyroX ?? 0}, {latestVitalPoint.gyroY ?? 0}, {latestVitalPoint.gyroZ ?? 0}</code>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.4rem 0' }}>
+                      <span style={{ color: 'var(--text-secondary)' }}>GPS NEO-M8N:</span>
+                      <b>
+                        {latestVitalPoint.gpsFix || latestVitalPoint.gpsSat > 0
+                          ? `Fix Active (${latestVitalPoint.gpsSat ?? 0} Sats)`
+                          : 'No Fix (Outdoor sight needed)'}
+                      </b>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -597,6 +869,98 @@ const DoctorDashboard = () => {
                 <button type="submit" className="btn-primary">Register Patient</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── ESP8266 HARDWARE CONNECTION MODAL ────────────────────────────── */}
+      {showHardwareModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.78)', backdropFilter: 'blur(5px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '1rem' }}>
+          <div className="glass-panel fade-in" style={{ padding: '2rem', width: '100%', maxWidth: '580px', position: 'relative', border: '1px solid var(--accent-primary)', maxHeight: '90vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid var(--glass-border)', paddingBottom: '0.75rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <Cpu size={22} color="var(--accent-primary)" />
+                <h2 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
+                  ESP8266 Hardware Link
+                </h2>
+              </div>
+              <button onClick={() => setShowHardwareModal(false)} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '1.2rem' }}>
+                ✕
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.85rem 1rem', background: deviceStatus.online ? 'rgba(32, 201, 151, 0.12)' : 'rgba(255, 193, 7, 0.12)', border: `1px solid ${deviceStatus.online ? 'var(--status-stable)' : 'var(--warning)'}`, borderRadius: '10px', marginBottom: '1.25rem' }}>
+              <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: deviceStatus.online ? 'var(--status-stable)' : 'var(--warning)', boxShadow: deviceStatus.online ? '0 0 8px var(--status-stable)' : 'none' }} />
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 700, fontSize: '0.9rem', color: deviceStatus.online ? 'var(--status-stable)' : 'var(--warning)' }}>
+                  Status: {deviceStatus.online ? 'ESP8266 CONNECTED & TRANSMITTING' : 'WAITING FOR HARDWARE / OFFLINE'}
+                </div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                  {deviceStatus.online ? `Last packet received: ${deviceStatus.secondsAgo != null ? `${deviceStatus.secondsAgo}s ago` : 'just now'}` : 'No live telemetry packets received in the last 10 seconds.'}
+                </div>
+              </div>
+            </div>
+
+            {/* Mode 1: Polling ESP8266 IP */}
+            <form onSubmit={handleSaveHardwareConfig} style={{ marginBottom: '1.5rem' }}>
+              <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.35rem' }}>
+                Option A: Connect via ESP8266 Web Server IP
+              </label>
+              <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', margin: '0 0 0.75rem 0' }}>
+                If your ESP8266 serves <code>GET /data</code> on your Wi-Fi, enter its IP address below. SWASTHYAEDGE will automatically poll it every 1.5 seconds.
+              </p>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <input
+                  type="text"
+                  value={ipInput}
+                  onChange={(e) => setIpInput(e.target.value)}
+                  placeholder="e.g. 192.168.1.105 or 10.173.x.x"
+                  className="glass-input"
+                  style={{ flex: 1, fontFamily: 'monospace' }}
+                />
+                <button type="submit" disabled={savingHardware} className="btn-primary" style={{ whiteSpace: 'nowrap' }}>
+                  {savingHardware ? 'Connecting...' : 'Save & Poll'}
+                </button>
+              </div>
+              {hardwareConfig.lastPollStatus === 'ERROR' && (
+                <div style={{ fontSize: '0.75rem', color: 'var(--danger)', marginTop: '0.4rem' }}>
+                  Poll Error: {hardwareConfig.lastPollError}
+                </div>
+              )}
+            </form>
+
+            {/* Mode 2: ESP8266 HTTP POST Address */}
+            <div style={{ padding: '1rem', background: 'rgba(0, 210, 255, 0.05)', border: '1px solid rgba(0, 210, 255, 0.2)', borderRadius: '10px', marginBottom: '1.5rem' }}>
+              <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--accent-primary)', marginBottom: '0.35rem' }}>
+                Option B: ESP8266 Direct HTTP POST Address
+              </div>
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: '0 0 0.5rem 0' }}>
+                If your ESP8266 Arduino code is configured to POST JSON packets directly, configure it to send to this Local Wi-Fi address:
+              </p>
+              <div style={{ background: 'rgba(0,0,0,0.4)', padding: '0.5rem 0.75rem', borderRadius: '6px', fontFamily: 'monospace', fontSize: '0.82rem', color: '#00d2ff', wordBreak: 'break-all', userSelect: 'all' }}>
+                {hardwareConfig.lanIngestionUrl || `http://${window.location.hostname}:5001/api/telemetry/esp8266`}
+              </div>
+            </div>
+
+            {/* Test Hardware Pulse */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '1rem', borderTop: '1px solid var(--glass-border)' }}>
+              <button
+                type="button"
+                onClick={handleTriggerTestPulse}
+                className="btn-secondary"
+                style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem' }}
+              >
+                <Radio size={14} color="var(--accent-primary)" />
+                {pulseSuccess ? '✓ Test Pulse Sent!' : 'Send Test Hardware Pulse'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowHardwareModal(false)}
+                className="btn-secondary"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}

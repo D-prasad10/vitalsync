@@ -176,23 +176,23 @@ const PatientCard = ({
         const temp = latestVitals.temp ?? latestVitals.temperature;
         const sys = latestVitals.bpSys ?? latestVitals.bp_sys;
         const dia = latestVitals.bpDia ?? latestVitals.bp_dia;
-        const bpDisplay = (sys != null && dia != null) ? `${sys}/${dia}` : (latestVitals.bp ?? '--');
+        const bpDisplay = (sys != null && dia != null) ? `${sys}/${dia}` : (latestVitals.bp ?? 'Unavailable');
 
         return (
           <div className="mini-vitals-grid">
-            <div className="mini-vital">
+            <div className="mini-vital" title="Heart Rate">
               <Heart color="#ff4d4f" />
               <span>{hr != null ? `${hr} BPM` : '--'}</span>
             </div>
-            <div className="mini-vital">
+            <div className="mini-vital" title="SpO2">
               <Wind color="#00d2ff" />
               <span>{spo2 != null ? `${spo2}%` : '--'}</span>
             </div>
-            <div className="mini-vital">
+            <div className="mini-vital" title="Temperature">
               <Thermometer color="#20c997" />
               <span>{temp != null ? `${temp}°F` : '--'}</span>
             </div>
-            <div className="mini-vital">
+            <div className="mini-vital" title="Blood Pressure: Unavailable (No Sensor)">
               <Activity color="#ffc107" />
               <span>{bpDisplay}</span>
             </div>

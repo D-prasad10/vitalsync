@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import PatientCard from '../components/PatientCard';
 import SensorGraph from '../components/SensorGraph';
-import { useRealtimeData } from '../utils/telemetryStore';
+import { useRealtimeData, seedPatientTelemetry } from '../utils/telemetryStore';
 
 const FieldBlock = ({ label, value, editing, name, onChange, type = 'text', children }) => (
   <div className="glass-panel" style={{ padding: '1rem', background: 'rgba(0,0,0,0.15)' }}>
@@ -42,7 +42,11 @@ const PatientDashboard = () => {
     fetch(`http://localhost:5001/api/patients/${patient.id}/history`)
       .then(res => res.json())
       .then(data => {
-        setHistory(Array.isArray(data) ? data : []);
+        const hist = Array.isArray(data) ? data : [];
+        setHistory(hist);
+        if (hist.length > 0) {
+          seedPatientTelemetry(patient.id, hist);
+        }
         setLoadingHistory(false);
       })
       .catch(() => {
@@ -62,6 +66,16 @@ const PatientDashboard = () => {
         if (list.length > 0) {
           handleSelectPatient(list[0]);
         }
+        list.forEach(p => {
+          fetch(`http://localhost:5001/api/patients/${p.id}/history`)
+            .then(r => r.json())
+            .then(hist => {
+              if (Array.isArray(hist) && hist.length > 0) {
+                seedPatientTelemetry(p.id, hist);
+              }
+            })
+            .catch(() => {});
+        });
         setFetchingPatients(false);
       })
       .catch(err => {
@@ -134,7 +148,8 @@ const PatientDashboard = () => {
   const temp = latestVitalPoint.temp ?? latestVitalPoint.temperature ?? null;
   const sys = latestVitalPoint.bp_sys ?? latestVitalPoint.bpSys ?? null;
   const dia = latestVitalPoint.bp_dia ?? latestVitalPoint.bpDia ?? null;
-  const bp = (sys !== null && dia !== null) ? `${sys}/${dia}` : (latestVitalPoint.bp ?? latestVitalPoint.blood_pressure ?? '--');
+  const hasBp = (sys !== null && dia !== null);
+  const bp = hasBp ? `${sys}/${dia}` : 'Unavailable (No Sensor)';
 
   // Compute Health Status
   const healthStatus = useMemo(() => {
@@ -324,59 +339,63 @@ const PatientDashboard = () => {
 
             {/* 3. Live Vitals Metrics Cards Grid */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
-              {/* Heart Rate */}
-              <div className="glass-panel" style={{ padding: '1.25rem', borderLeft: '4px solid #ff4d4f' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                  <span style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Heart Rate</span>
-                  <Heart size={18} style={{ color: '#ff4d4f' }} />
-                </div>
-                <div style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.2rem' }}>
-                  {heartRate !== null ? heartRate : '--'} <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 400 }}>bpm</span>
-                </div>
-                <div style={{ fontSize: '0.75rem', color: heartRate && heartRate > 100 ? 'var(--warning)' : 'var(--text-muted)' }}>
-                  Normal range: 60-100 bpm
-                </div>
-              </div>
-
-              {/* SpO2 */}
-              <div className="glass-panel" style={{ padding: '1.25rem', borderLeft: '4px solid #00d2ff' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                  <span style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Blood Oxygen (SpO2)</span>
-                  <Wind size={18} style={{ color: '#00d2ff' }} />
-                </div>
-                <div style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.2rem' }}>
-                  {spo2 !== null ? spo2 : '--'} <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 400 }}>%</span>
-                </div>
-                <div style={{ fontSize: '0.75rem', color: spo2 && spo2 < 95 ? 'var(--warning)' : 'var(--text-muted)' }}>
-                  Normal range: 95-100%
-                </div>
-              </div>
-
-              {/* Body Temperature */}
+              {/* Temperature: Both DHT11 & BMP280 */}
               <div className="glass-panel" style={{ padding: '1.25rem', borderLeft: '4px solid #20c997' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                  <span style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Body Temp</span>
+                  <span style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Temperature (DHT11 & BMP280)</span>
                   <Thermometer size={18} style={{ color: '#20c997' }} />
                 </div>
-                <div style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.2rem' }}>
-                  {temp !== null ? temp : '--'} <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 400 }}>°F</span>
+                <div style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.2rem' }}>
+                  {latestVitalPoint.dhtTemp != null || latestVitalPoint.bmpTemp != null
+                    ? `DHT: ${latestVitalPoint.dhtTemp ?? '--'}°C | BMP: ${latestVitalPoint.bmpTemp ?? '--'}°C`
+                    : (temp !== null ? `${temp}°F` : '--')}
                 </div>
-                <div style={{ fontSize: '0.75rem', color: temp && temp > 100 ? 'var(--warning)' : 'var(--text-muted)' }}>
-                  Normal range: 97-99 °F
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                  Ambient and barometric medical sensors
                 </div>
               </div>
 
-              {/* Blood Pressure */}
-              <div className="glass-panel" style={{ padding: '1.25rem', borderLeft: '4px solid #3a7bd5' }}>
+              {/* MAX30100 Raw Optical Signals */}
+              <div className="glass-panel" style={{ padding: '1.25rem', borderLeft: '4px solid #ff4d4f' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                  <span style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Blood Pressure</span>
-                  <Activity size={18} style={{ color: '#3a7bd5' }} />
+                  <span style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>MAX30100 Optical Raw</span>
+                  <Heart size={18} style={{ color: '#ff4d4f' }} />
                 </div>
-                <div style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.2rem' }}>
-                  {bp || '120/80'} <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 400 }}>mmHg</span>
+                <div style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.2rem' }}>
+                  {latestVitalPoint.maxFound !== false
+                    ? `IR: ${latestVitalPoint.maxIR ?? 0} | RED: ${latestVitalPoint.maxRED ?? 0}`
+                    : 'Sensor Disconnected'}
                 </div>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                  Normal range: 120/80 mmHg
+                  Raw optical signal (Clinical vitals not synthesized)
+                </div>
+              </div>
+
+              {/* Blood Pressure: No Sensor */}
+              <div className="glass-panel" style={{ padding: '1.25rem', borderLeft: '4px solid #ffc107' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                  <span style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Blood Pressure</span>
+                  <Activity size={18} style={{ color: '#ffc107' }} />
+                </div>
+                <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.2rem' }}>
+                  Unavailable (No Sensor)
+                </div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                  Hardware does not possess a blood pressure sensor
+                </div>
+              </div>
+
+              {/* Humidity DHT11 */}
+              <div className="glass-panel" style={{ padding: '1.25rem', borderLeft: '4px solid #00d2ff' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                  <span style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Humidity (DHT11)</span>
+                  <Wind size={18} style={{ color: '#00d2ff' }} />
+                </div>
+                <div style={{ fontSize: '1.4rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.2rem' }}>
+                  {latestVitalPoint.humidity != null ? `${latestVitalPoint.humidity} %` : '--'}
+                </div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                  Atmospheric room humidity
                 </div>
               </div>
             </div>

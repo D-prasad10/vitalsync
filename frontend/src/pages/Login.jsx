@@ -185,13 +185,13 @@ const Login = ({ onLogin }) => {
         {/* Logo */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', color: 'var(--accent-primary)', marginBottom: '2rem', justifyContent: 'center' }}>
           <HeartPulse size={36} />
-          <span style={{ fontSize: '1.75rem', fontWeight: 800, letterSpacing: '-0.5px' }}>VitalsSync</span>
+          <span style={{ fontSize: '1.75rem', fontWeight: 800, letterSpacing: '-0.5px' }}>SWASTHYAEDGE</span>
         </div>
 
         {/* STEP 1: Credentials & Role */}
         {step === 1 && (
           <div className="glass-panel fade-in" style={{ padding: '2.5rem' }}>
-            <h2 style={{ fontSize: '1.4rem', fontWeight: 700, marginBottom: '0.5rem' }}>Welcome to VitalsSync</h2>
+            <h2 style={{ fontSize: '1.4rem', fontWeight: 700, marginBottom: '0.5rem' }}>Welcome to SWASTHYAEDGE</h2>
             <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem', fontSize: '0.9rem' }}>
               Enter your details to receive an OTP and access the dashboard.
             </p>

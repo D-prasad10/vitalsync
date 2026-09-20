@@ -48,6 +48,7 @@ const getValue = (d, key, fallbackKey) => {
   if (key === 'bp_sys' || key === 'bpSys') return d.bp_sys ?? d.bpSys ?? null;
   if (key === 'bp_dia' || key === 'bpDia') return d.bp_dia ?? d.bpDia ?? null;
   if (key === 'health_score' || key === 'healthScore') return d.health_score ?? d.healthScore ?? null;
+  if (key === 'ecg' || key === 'ecg_val') return d.ecg?.value ?? d.ecg_val ?? (typeof d.ecg === 'number' ? d.ecg : null);
   
   return null;
 };
@@ -75,14 +76,22 @@ const SensorGraph = ({
   let formattedValue = '--';
   if (displayValue !== null) {
     formattedValue = displayValue;
+  } else if (title && (title.toLowerCase().includes('bp') || title.toLowerCase().includes('blood pressure'))) {
+    formattedValue = 'Unavailable (No Sensor)';
   } else if (latestPoint) {
     if (datasets && datasets.length >= 2) {
       const val1 = getValue(latestPoint, datasets[0].dataKey, datasets[0].fallbackKey);
       const val2 = getValue(latestPoint, datasets[1].dataKey, datasets[1].fallbackKey);
-      formattedValue = (val1 !== null && val2 !== null) ? `${val1}/${val2}${unit ? ` ${unit}` : ''}` : '--';
+      formattedValue = (val1 !== null && val2 !== null) ? `${val1}/${val2}${unit ? ` ${unit}` : ''}` : 'Unavailable (No Sensor)';
     } else if (dataKey) {
       const rawVal = getValue(latestPoint, dataKey);
-      formattedValue = (rawVal !== null && rawVal !== undefined) ? `${rawVal}${unit ? ` ${unit}` : ''}` : '--';
+      if (rawVal !== null && rawVal !== undefined) {
+        formattedValue = `${rawVal}${unit ? ` ${unit}` : ''}`;
+      } else if (dataKey === 'hr' || dataKey === 'spo2') {
+        formattedValue = 'Awaiting Finger';
+      } else {
+        formattedValue = '--';
+      }
     }
   }
 

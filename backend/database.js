@@ -39,6 +39,7 @@ const db = new sqlite3.Database(dbPath, (err) => {
         db.run(`ALTER TABLE patients ADD COLUMN doctor_phone TEXT DEFAULT NULL`, () => {});
         db.run(`ALTER TABLE patients ADD COLUMN doctor_specialization TEXT DEFAULT NULL`, () => {});
         db.run(`ALTER TABLE patients ADD COLUMN doctor_email TEXT DEFAULT NULL`, () => {});
+        db.run(`ALTER TABLE patients ADD COLUMN device_id TEXT DEFAULT NULL`, () => {});
       });
       
       // Thresholds Table (1 to 1 relation with patient)
@@ -67,10 +68,29 @@ const db = new sqlite3.Database(dbPath, (err) => {
           temp REAL,
           timestamp INTEGER,
           health_score INTEGER,
+          humidity REAL DEFAULT NULL,
+          pressure REAL DEFAULT NULL,
+          ecg_val INTEGER DEFAULT NULL,
+          mq135 TEXT DEFAULT NULL,
+          gps_lat REAL DEFAULT NULL,
+          gps_lng REAL DEFAULT NULL,
+          raw_payload TEXT DEFAULT NULL,
           FOREIGN KEY (patient_id) REFERENCES patients(id)
         )
       `, () => {
         db.run(`ALTER TABLE sensor_logs ADD COLUMN health_score INTEGER`, () => {});
+        db.run(`ALTER TABLE sensor_logs ADD COLUMN humidity REAL`, () => {});
+        db.run(`ALTER TABLE sensor_logs ADD COLUMN pressure REAL`, () => {});
+        db.run(`ALTER TABLE sensor_logs ADD COLUMN ecg_val INTEGER`, () => {});
+        db.run(`ALTER TABLE sensor_logs ADD COLUMN mq135 TEXT`, () => {});
+        db.run(`ALTER TABLE sensor_logs ADD COLUMN gps_lat REAL`, () => {});
+        db.run(`ALTER TABLE sensor_logs ADD COLUMN gps_lng REAL`, () => {});
+        db.run(`ALTER TABLE sensor_logs ADD COLUMN raw_payload TEXT`, () => {});
+        db.run(`ALTER TABLE sensor_logs ADD COLUMN dht_temp REAL`, () => {});
+        db.run(`ALTER TABLE sensor_logs ADD COLUMN bmp_temp REAL`, () => {});
+        db.run(`ALTER TABLE sensor_logs ADD COLUMN max_ir INTEGER`, () => {});
+        db.run(`ALTER TABLE sensor_logs ADD COLUMN max_red INTEGER`, () => {});
+        db.run(`ALTER TABLE sensor_logs ADD COLUMN device_ip TEXT`, () => {});
       });
 
       // Staff Table (doctors and caretakers who can log in)

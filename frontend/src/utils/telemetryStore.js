@@ -101,6 +101,18 @@ if (typeof window !== 'undefined') {
   window.pushTestAlert = pushTestAlert;
 }
 
+export const seedPatientTelemetry = (patientId, points) => {
+  if (!patientId || !Array.isArray(points) || points.length === 0) return;
+  const pid = String(patientId);
+  const existing = globalTelemetry[pid] || [];
+  if (existing.length === 0) {
+    const recent = points.slice(-MAX_POINTS);
+    globalTelemetry = { ...globalTelemetry, [pid]: recent };
+    pendingChangedPatients.add(pid);
+    flushTelemetry();
+  }
+};
+
 export const getSocket = () => {
   if (socketRef) return socketRef;
 
@@ -110,6 +122,7 @@ export const getSocket = () => {
   });
 
   socketRef.on('sensor_data', handleSensorData);
+  socketRef.on('telemetry_update', handleSensorData);
   socketRef.on('emergency_alert', handleEmergencyAlert);
 
   return socketRef;
@@ -120,6 +133,7 @@ export const initTelemetrySocket = (socket) => {
   if (socket) {
     socketRef = socket;
     socketRef.on('sensor_data', handleSensorData);
+    socketRef.on('telemetry_update', handleSensorData);
     socketRef.on('emergency_alert', handleEmergencyAlert);
     return socketRef;
   }

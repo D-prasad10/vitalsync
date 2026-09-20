@@ -28,8 +28,7 @@ const Sidebar = ({ user, onLogout, isOpen, onClose }) => {
           <div className="sidebar-logo">
             <HeartPulse size={24} color="var(--accent-primary)" />
             <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.15 }}>
-              <span style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>VoltVertex</span>
-              <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--accent-primary)' }}>VitalsSync</span>
+              <span style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>SWASTHYAEDGE</span>
             </div>
           </div>
           <button className="sidebar-close-btn" onClick={onClose} aria-label="Close Sidebar">

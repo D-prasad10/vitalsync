@@ -3,7 +3,7 @@ import { Activity, ShieldAlert, PhoneCall, Stethoscope, Pencil, Check, X, User, 
 import SensorGraph from '../components/SensorGraph';
 import HealthScorePanel from '../components/HealthScorePanel';
 import PatientCard from '../components/PatientCard';
-import { useRealtimeData } from '../utils/telemetryStore';
+import { useRealtimeData, seedPatientTelemetry } from '../utils/telemetryStore';
 
 const CaretakerDashboard = () => {
   const globalRealtimeData = useRealtimeData();
@@ -23,6 +23,16 @@ const CaretakerDashboard = () => {
         const list = Array.isArray(data) ? data : [];
         setPatients(list);
         if (list.length > 0) selectPatient(list[0]);
+        list.forEach(p => {
+          fetch(`http://localhost:5001/api/patients/${p.id}/history`)
+            .then(r => r.json())
+            .then(hist => {
+              if (Array.isArray(hist) && hist.length > 0) {
+                seedPatientTelemetry(p.id, hist);
+              }
+            })
+            .catch(() => {});
+        });
         setLoading(false);
       })
       .catch(() => { if (mounted) setLoading(false); });
@@ -41,7 +51,13 @@ const CaretakerDashboard = () => {
 
     fetch(`http://localhost:5001/api/patients/${p.id}/history`)
       .then(res => res.json())
-      .then(data => setHistory(Array.isArray(data) ? data : []))
+      .then(data => {
+        const hist = Array.isArray(data) ? data : [];
+        setHistory(hist);
+        if (hist.length > 0) {
+          seedPatientTelemetry(p.id, hist);
+        }
+      })
       .catch(() => setHistory([]));
   }
 
@@ -65,7 +81,8 @@ const CaretakerDashboard = () => {
     setContactEdit(prev => ({ ...prev, [field]: false }));
   };
 
-  const currentRealtimeData = (activePatient && globalRealtimeData[activePatient.id]) ? globalRealtimeData[activePatient.id] : [];
+  const realtimeForPatient = (activePatient && globalRealtimeData[activePatient.id]) ? globalRealtimeData[activePatient.id] : [];
+  const currentRealtimeData = realtimeForPatient.length > 0 ? realtimeForPatient : history;
   const latestPoint = currentRealtimeData.length > 0 ? currentRealtimeData[currentRealtimeData.length - 1] : {};
 
   // Status helper
@@ -186,53 +203,79 @@ const CaretakerDashboard = () => {
                 </div>
               )}
 
+              {/* Hardware Sensor Alerts */}
+              {(latestPoint.leadOffPlus || latestPoint.leadOffMinus) && (
+                <div style={{ padding: '0.85rem 1rem', background: 'rgba(255, 77, 79, 0.15)', border: '1px solid rgba(255, 77, 79, 0.4)', borderRadius: '8px', color: '#ff4d4f', fontSize: '0.85rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <AlertTriangle size={18} />
+                  <span>ECG LEADS DISCONNECTED — LO+ / LO- Active! Reposition AD8232 chest electrodes.</span>
+                </div>
+              )}
+
+              {latestPoint.mq135 === 'ALERT' && (
+                <div style={{ padding: '0.85rem 1rem', background: 'rgba(255, 77, 79, 0.2)', border: '1px solid rgba(255, 77, 79, 0.5)', borderRadius: '8px', color: '#ff4d4f', fontSize: '0.85rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <AlertTriangle size={18} />
+                  <span>HAZARDOUS GAS / SMOKE DETECTED — MQ-135 alert triggered in patient environment!</span>
+                </div>
+              )}
+
               {/* Health Score Component */}
               <HealthScorePanel currentData={currentRealtimeData} historyData={history} />
 
               {/* Live Vitals Telemetry Grid */}
               <div className="glass-panel" style={{ padding: '1.5rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-                  <h2 style={{ fontSize: '1.1rem', fontWeight: 600, margin: 0 }}>Live Vital Sensor Feeds</h2>
+                  <h2 style={{ fontSize: '1.1rem', fontWeight: 600, margin: 0 }}>Live Vital Sensor Feeds (ESP8266 Hardware)</h2>
                   <span className="badge badge-stable">● Real-time Stream</span>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1.25rem' }}>
                   <SensorGraph
-                    title="Heart Rate"
-                    unit="BPM"
+                    title="Temperature (DHT11 & BMP280)"
+                    unit="°C"
                     dataPoints={currentRealtimeData}
-                    dataKey="hr"
+                    dataKey="temp"
+                    color="#20c997"
+                    yMin={15}
+                    yMax={50}
+                    displayValue={
+                      latestPoint.dhtTemp != null || latestPoint.bmpTemp != null
+                        ? `DHT: ${latestPoint.dhtTemp ?? '--'}°C | BMP: ${latestPoint.bmpTemp ?? '--'}°C`
+                        : (latestPoint.temp != null ? `${latestPoint.temp}°F` : '--')
+                    }
+                  />
+                  <SensorGraph
+                    title="MAX30100 (Raw Optical)"
+                    unit="IR/RED"
+                    dataPoints={currentRealtimeData}
+                    dataKey="maxIR"
                     color="#ff4d4f"
-                    yMin={40}
-                    yMax={160}
+                    yMin={0}
+                    yMax={30000}
+                    displayValue={
+                      latestPoint.maxFound !== false
+                        ? `IR: ${latestPoint.maxIR ?? 0} | RED: ${latestPoint.maxRED ?? 0}`
+                        : 'Sensor Disconnected'
+                    }
                   />
                   <SensorGraph
-                    title="SpO2 Oxygen"
-                    unit="%"
-                    dataPoints={currentRealtimeData}
-                    dataKey="spo2"
-                    color="#00d2ff"
-                    yMin={70}
-                    yMax={100}
-                  />
-                  <SensorGraph
-                    title="BP Systolic"
+                    title="Blood Pressure"
                     unit="mmHg"
                     dataPoints={currentRealtimeData}
                     dataKey="bpSys"
                     color="#ffc107"
                     yMin={60}
                     yMax={200}
-                    displayValue={latestPoint.bpSys ? `${latestPoint.bpSys} / ${latestPoint.bpDia || '--'}` : '--'}
+                    displayValue="Unavailable (No Sensor)"
                   />
                   <SensorGraph
-                    title="Temperature"
-                    unit="°F"
+                    title="Humidity (DHT11)"
+                    unit="%"
                     dataPoints={currentRealtimeData}
-                    dataKey="temp"
-                    color="#20c997"
-                    yMin={94}
-                    yMax={108}
+                    dataKey="humidity"
+                    color="#00d2ff"
+                    yMin={10}
+                    yMax={100}
+                    displayValue={latestPoint.humidity != null ? `${latestPoint.humidity}%` : '--'}
                   />
                 </div>
               </div>
