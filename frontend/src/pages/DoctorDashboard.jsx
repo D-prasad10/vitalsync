@@ -16,7 +16,16 @@ const DoctorDashboard = () => {
   const [_selectedDate, setSelectedDate] = useState('');
   const [thresholds, setThresholds] = useState({});
   const [_loading, setLoading] = useState(false);
+  const [loadingPatients, setLoadingPatients] = useState(true);
+  const [actionFeedback, setActionFeedback] = useState(null);
   const [deviceStatus, setDeviceStatus] = useState({ online: false, deviceId: null, lastSeen: null, ip: null });
+
+  const showFeedback = (type, message) => {
+    setActionFeedback({ type, message });
+    setTimeout(() => {
+      setActionFeedback(null);
+    }, 4500);
+  };
 
   // Hardware Config & Modal state
   const [hardwareConfig, setHardwareConfig] = useState({
@@ -83,12 +92,14 @@ const DoctorDashboard = () => {
 
   useEffect(() => {
     let mounted = true;
+    setLoadingPatients(true);
     fetch('http://localhost:5001/api/patients')
       .then(res => res.json())
       .then(data => {
         if (!mounted) return;
         const list = Array.isArray(data) ? data : [];
         setPatients(list);
+        setLoadingPatients(false);
 
         // Pre-seed telemetry for each patient from history so cards immediately render real data
         list.forEach(p => {
@@ -102,7 +113,10 @@ const DoctorDashboard = () => {
             .catch(() => {});
         });
       })
-      .catch(err => console.error('Failed to fetch patients:', err));
+      .catch(err => {
+        console.error('Failed to fetch patients:', err);
+        if (mounted) setLoadingPatients(false);
+      });
 
     return () => { mounted = false; };
   }, []);
@@ -162,7 +176,7 @@ const DoctorDashboard = () => {
         setShowHardwareModal(false);
       }
     } catch (err) {
-      alert('Failed to save hardware config: ' + err.message);
+      showFeedback('alert', 'Failed to save hardware config: ' + err.message);
     } finally {
       setSavingHardware(false);
     }
@@ -181,7 +195,7 @@ const DoctorDashboard = () => {
         setTimeout(() => setPulseSuccess(false), 2500);
       }
     } catch (err) {
-      alert('Failed to send test pulse: ' + err.message);
+      showFeedback('alert', 'Failed to send test pulse: ' + err.message);
     }
   };
 
@@ -200,8 +214,11 @@ const DoctorDashboard = () => {
       .then(res => res.json())
       .then(data => {
         if (data.success) {
-          alert('Threshold parameters saved successfully!');
+          showFeedback('success', 'Threshold parameters saved successfully!');
         }
+      })
+      .catch(err => {
+        showFeedback('alert', 'Failed to save thresholds: ' + err.message);
       });
   };
 
@@ -236,7 +253,7 @@ const DoctorDashboard = () => {
         setNewPatientForm({ name: '', age: '', gender: 'Not Specified', blood_group: '', weight: '', mobile: '', guardian_contact: '', room_number: '' });
       }
     } catch {
-      alert('Error registering patient');
+      showFeedback('alert', 'Error registering patient');
     }
   };
 
@@ -263,17 +280,33 @@ const DoctorDashboard = () => {
     return { status: 'Stable', className: 'status-stable', color: 'var(--status-stable)' };
   };
 
+  // Clinical Triage KPI aggregations
+  const triageStats = useMemo(() => {
+    let stable = 0;
+    let warning = 0;
+    let critical = 0;
+    patients.forEach(p => {
+      const st = getPatientStatusData(p.id, globalRealtimeData).status;
+      if (st === 'Critical') critical++;
+      else if (st === 'Warning') warning++;
+      else stable++;
+    });
+    return {
+      total: patients.length,
+      stable,
+      warning,
+      critical
+    };
+  }, [patients, globalRealtimeData]);
+
+  // Synchronized search & clinical status filter
   const filteredPatients = useMemo(() => {
     return patients.filter(p => {
       const matchesSearch =
         p.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (p.room_number && p.room_number.toString().includes(searchTerm)) ||
         (p.blood_group && p.blood_group.toLowerCase().includes(searchTerm.toLowerCase()));
-      const data = globalRealtimeData[p.id];
-      const score = (data && data.length > 0 && data[data.length - 1].healthScore !== undefined)
-        ? data[data.length - 1].healthScore
-        : 100;
-      const status = score < 50 ? 'Critical' : score < 80 ? 'Warning' : 'Stable';
+      const { status } = getPatientStatusData(p.id, globalRealtimeData);
       const matchesStatus = statusFilter === 'All' || status === statusFilter;
       return matchesSearch && matchesStatus;
     });
@@ -351,9 +384,103 @@ const DoctorDashboard = () => {
         </div>
       </div>
 
+      {/* ── ACCESSIBLE ACTION / ALERT FEEDBACK TOAST ──────────────────────── */}
+      {actionFeedback && (
+        <div
+          role={actionFeedback.type === 'alert' ? 'alert' : 'status'}
+          aria-live="polite"
+          className="fade-in glass-panel"
+          style={{
+            padding: '0.85rem 1.25rem',
+            marginBottom: '1.25rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '0.75rem',
+            background: actionFeedback.type === 'alert' ? 'rgba(255, 77, 79, 0.15)' : 'rgba(32, 201, 151, 0.15)',
+            border: `1px solid ${actionFeedback.type === 'alert' ? 'var(--status-critical)' : 'var(--status-stable)'}`,
+            color: actionFeedback.type === 'alert' ? '#ff4d4f' : '#20c997',
+            borderRadius: 'var(--radius-sm)',
+            fontSize: '0.9rem',
+            fontWeight: 600
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            {actionFeedback.type === 'alert' ? <ShieldAlert size={18} /> : <CheckCircle2 size={18} />}
+            <span>{actionFeedback.message}</span>
+          </div>
+          <button
+            onClick={() => setActionFeedback(null)}
+            style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: '1rem' }}
+            aria-label="Close notification"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* ── PATIENT DIRECTORY (GRID VIEW) ────────────────────────────────── */}
       {!activePatient ? (
         <div>
+          {/* Clinical Triage KPI Summary Bar */}
+          <div className="triage-kpi-grid">
+            <div
+              className={`triage-kpi-card ${statusFilter === 'All' ? 'active-filter' : ''}`}
+              onClick={() => setStatusFilter('All')}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setStatusFilter('All'); } }}
+              aria-label="Filter: All Inpatients"
+            >
+              <div className="triage-kpi-label">
+                <User size={13} color="var(--accent-primary)" /> Total Inpatients
+              </div>
+              <div className="triage-kpi-val">{triageStats.total}</div>
+            </div>
+
+            <div
+              className={`triage-kpi-card ${statusFilter === 'Stable' ? 'active-filter' : ''}`}
+              onClick={() => setStatusFilter('Stable')}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setStatusFilter('Stable'); } }}
+              aria-label="Filter: Stable Patients"
+            >
+              <div className="triage-kpi-label" style={{ color: 'var(--status-stable)' }}>
+                <CheckCircle2 size={13} color="var(--status-stable)" /> Stable
+              </div>
+              <div className="triage-kpi-val" style={{ color: 'var(--status-stable)' }}>{triageStats.stable}</div>
+            </div>
+
+            <div
+              className={`triage-kpi-card ${statusFilter === 'Warning' ? 'active-filter' : ''}`}
+              onClick={() => setStatusFilter('Warning')}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setStatusFilter('Warning'); } }}
+              aria-label="Filter: Under Observation"
+            >
+              <div className="triage-kpi-label" style={{ color: 'var(--status-warning)' }}>
+                <AlertTriangle size={13} color="var(--status-warning)" /> Observation
+              </div>
+              <div className="triage-kpi-val" style={{ color: 'var(--status-warning)' }}>{triageStats.warning}</div>
+            </div>
+
+            <div
+              className={`triage-kpi-card ${statusFilter === 'Critical' ? 'active-filter' : ''}`}
+              onClick={() => setStatusFilter('Critical')}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setStatusFilter('Critical'); } }}
+              aria-label="Filter: Critical Triage"
+            >
+              <div className="triage-kpi-label" style={{ color: 'var(--status-critical)' }}>
+                <ShieldAlert size={13} color="var(--status-critical)" /> Critical Triage
+              </div>
+              <div className="triage-kpi-val" style={{ color: 'var(--status-critical)' }}>{triageStats.critical}</div>
+            </div>
+          </div>
+
           {/* Search & Status Filter Control Bar */}
           <div className="glass-panel" style={{ padding: '1.25rem', marginBottom: '1.5rem', display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
             <div style={{ flex: 1, position: 'relative', minWidth: '240px' }}>
@@ -390,11 +517,25 @@ const DoctorDashboard = () => {
 
           {/* Unified Patient Grid */}
           <div className="patient-grid">
-            {filteredPatients.length === 0 ? (
+            {loadingPatients ? (
+              <div className="empty-state glass-panel" style={{ gridColumn: '1 / -1', padding: '4rem 2rem' }}>
+                <div className="loading-spinner" />
+                <span style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-primary)', marginTop: '1rem' }}>
+                  Synchronizing Patient Directory...
+                </span>
+                <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                  Retrieving live telemetry records and active clinical nodes.
+                </span>
+              </div>
+            ) : filteredPatients.length === 0 ? (
               <div className="empty-state glass-panel" style={{ gridColumn: '1 / -1', padding: '4rem 2rem' }}>
                 <User size={36} />
                 <span style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-primary)' }}>No Patients Found</span>
-                <span style={{ fontSize: '0.85rem' }}>No patient records match your search criteria.</span>
+                <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                  {statusFilter !== 'All'
+                    ? `No patient records found under "${statusFilter}" status filter.`
+                    : 'No patient records match your search criteria.'}
+                </span>
               </div>
             ) : (
               filteredPatients.map(p => {
@@ -463,7 +604,7 @@ const DoctorDashboard = () => {
                 </div>
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', fontSize: '0.85rem', color: 'var(--text-secondary)', borderLeft: '1px solid var(--glass-border)', paddingLeft: '1.25rem' }}>
+              <div className="dossier-contact-block">
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                   <Stethoscope size={14} color="var(--accent-primary)" /> Doctor: <b>{activePatient.doctor_name || 'Dr. Smith'}</b>
                 </div>
@@ -494,10 +635,16 @@ const DoctorDashboard = () => {
                     <strong>{activePatient.name}'s</strong> vital parameters have crossed critical safety thresholds. Immediate clinical triage recommended.
                   </p>
                   <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-                    <button className="btn-danger btn-sm" onClick={() => alert('Calling Nurse Station for urgent assistance...')}>
+                    <button
+                      className="btn-danger btn-sm"
+                      onClick={() => showFeedback('alert', `Urgent alert dispatched to Nurse Station for ${activePatient.name} (Room ${activePatient.room_number || 'N/A'}).`)}
+                    >
                       Call Nurse Station
                     </button>
-                    <button className="btn-secondary btn-sm" onClick={() => alert(`Notifying emergency guardian: ${activePatient.guardian_contact || 'N/A'}`)}>
+                    <button
+                      className="btn-secondary btn-sm"
+                      onClick={() => showFeedback('alert', `Emergency notification sent to guardian (${activePatient.guardian_contact || 'N/A'}) for ${activePatient.name}.`)}
+                    >
                       Notify Family
                     </button>
                   </div>
@@ -907,7 +1054,7 @@ const DoctorDashboard = () => {
                 Option A: Connect via ESP8266 Web Server IP
               </label>
               <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', margin: '0 0 0.75rem 0' }}>
-                If your ESP8266 serves <code>GET /data</code> on your Wi-Fi, enter its IP address below. SWASTHYAEDGE will automatically poll it every 1.5 seconds.
+                If your ESP8266 serves <code>GET /data</code> on your Wi-Fi, enter its IP address below. Vitalsync will automatically poll it every 1.5 seconds.
               </p>
               <div style={{ display: 'flex', gap: '0.5rem' }}>
                 <input

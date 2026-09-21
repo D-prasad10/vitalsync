@@ -817,14 +817,99 @@ input, button, select, textarea {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  font-size: var(--font-sm);
+  font-size: var(--font-xs);
   color: var(--text-secondary);
+  background: rgba(0, 0, 0, 0.25);
+  padding: 0.4rem 0.6rem;
+  border-radius: var(--radius-xs);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  min-width: 0;
+}
+
+.mini-vital span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 500;
+  color: var(--text-primary);
 }
 
 .mini-vital svg {
-  width: 16px;
-  height: 16px;
+  width: 15px;
+  height: 15px;
   flex-shrink: 0;
+}
+
+/* ── 9B. CLINICAL TRIAGE KPI GRID & DOSSIER STYLES ────────────────────── */
+.triage-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.triage-kpi-card {
+  padding: 1rem 1.25rem;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  background: var(--bg-panel);
+  border: 1px solid var(--glass-border);
+  position: relative;
+  overflow: hidden;
+}
+
+.triage-kpi-card:hover {
+  border-color: var(--glass-border-hover);
+  background: var(--bg-panel-hover);
+  transform: translateY(-2px);
+}
+
+.triage-kpi-card.active-filter {
+  border-color: var(--accent-primary);
+  background: rgba(0, 210, 255, 0.08);
+  box-shadow: 0 0 16px rgba(0, 210, 255, 0.15);
+}
+
+.triage-kpi-val {
+  font-size: 1.6rem;
+  font-weight: 800;
+  line-height: 1.1;
+  color: var(--text-primary);
+}
+
+.triage-kpi-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.dossier-contact-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  border-left: 1px solid var(--glass-border);
+  padding-left: 1.5rem;
+}
+
+@media (max-width: 900px) {
+  .dossier-contact-block {
+    border-left: none;
+    border-top: 1px solid var(--glass-border);
+    padding-left: 0;
+    padding-top: 0.85rem;
+    width: 100%;
+  }
 }
 
 /* ── 10. CHART CONTAINER SAFETY ───────────────────────────────────────── */
@@ -1144,6 +1229,12 @@ input, button, select, textarea {
   .app-container.authenticated .main-content {
     max-width: none;
     margin-left: 0;
+  }
+}
+
+@media (max-width: 1200px) {
+  .dashboard-grid-layout {
+    grid-template-columns: 1fr !important;
   }
 }
 

@@ -239,14 +239,14 @@ const SensorGraph = ({
       </div>
 
       {/* Chart Body Container */}
-      <div className="chart-body-container" style={{ width: '100%', height, position: 'relative' }}>
+      <div className="chart-body-container" style={{ width: '100%', height, position: 'relative' }} role="region" aria-label={`${title} telemetry graph`}>
         {loading ? (
-          <div className="empty-state" style={{ height: '100%', padding: 0 }}>
+          <div className="empty-state" style={{ height: '100%', padding: 0 }} role="status" aria-label={`Updating ${title} sensor stream`}>
             <div className="loading-spinner" />
             <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Updating sensor stream...</span>
           </div>
         ) : !hasData ? (
-          <div className="empty-state" style={{ height: '100%', padding: '1rem', border: '1px dashed var(--glass-border)', borderRadius: '8px' }}>
+          <div className="empty-state" style={{ height: '100%', padding: '1rem', border: '1px dashed var(--glass-border)', borderRadius: '8px' }} role="status" aria-label={`No ${title} telemetry data available`}>
             <Activity size={24} style={{ color: 'var(--text-muted)' }} />
             <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 500 }}>No Telemetry Data Available</span>
             <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Waiting for live device stream...</span>
