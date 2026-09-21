@@ -162,10 +162,46 @@ class DeviceService {
 
   /**
    * Assigns a device to a specific patient.
+   * Validates both patient and device existence before mapping.
    */
   async assignDevice(deviceId, patientId) {
-    const did = String(deviceId).trim();
+    if (!deviceId || typeof deviceId !== 'string' || !deviceId.trim()) {
+      const err = new Error('Valid deviceId is required.');
+      err.status = 400;
+      throw err;
+    }
+
     const pid = Number(patientId);
+    if (!Number.isInteger(pid) || pid <= 0) {
+      const err = new Error('Valid patientId is required.');
+      err.status = 400;
+      throw err;
+    }
+
+    const did = String(deviceId).trim();
+
+    // Verify patient existence
+    const patient = await db.getAsync('SELECT id FROM patients WHERE id = ?', [pid]);
+    if (!patient) {
+      const err = new Error('Patient not found.');
+      err.status = 404;
+      throw err;
+    }
+
+    // Verify device existence (in DB, active heartbeats, or active ESP config)
+    const deviceInDb = await db.getAsync('SELECT id FROM devices WHERE device_id = ?', [did]);
+    const isKnownDevice = Boolean(
+      deviceInDb ||
+      this.deviceHeartbeats.has(did) ||
+      (this.activeEspConfig && this.activeEspConfig.deviceId === did)
+    );
+
+    if (!isKnownDevice) {
+      const err = new Error('Device not found.');
+      err.status = 404;
+      throw err;
+    }
+
     const now = Date.now();
 
     this.devicePatientMapping.set(did, pid);
@@ -231,13 +267,58 @@ class DeviceService {
 
   /**
    * Updates polling configuration.
+   * Validates all inputs strictly before applying. Throws HTTP 400 on invalid values.
    */
   async updateHardwareConfig(body, port) {
-    const { ip, patientId, pollingIntervalMs, isPolling } = body;
-    if (ip !== undefined) this.activeEspConfig.ip = String(ip).trim();
-    if (patientId !== undefined) this.activeEspConfig.patientId = Number(patientId) || 1;
-    if (pollingIntervalMs !== undefined) this.activeEspConfig.pollingIntervalMs = Math.max(500, Number(pollingIntervalMs) || 1500);
-    if (isPolling !== undefined) this.activeEspConfig.isPolling = Boolean(isPolling);
+    const { ip, patientId, pollingIntervalMs, isPolling } = body || {};
+
+    // Validate ip if provided
+    if (ip !== undefined) {
+      if (typeof ip !== 'string' || !String(ip).trim()) {
+        const err = new Error('ip must be a non-empty string.');
+        err.status = 400;
+        throw err;
+      }
+      const cleanIp = String(ip).trim();
+      if (cleanIp.length > 253) {
+        const err = new Error('ip address is too long.');
+        err.status = 400;
+        throw err;
+      }
+      this.activeEspConfig.ip = cleanIp;
+    }
+
+    // Validate patientId if provided
+    if (patientId !== undefined) {
+      const pidNum = Number(patientId);
+      if (!Number.isFinite(pidNum) || !Number.isInteger(pidNum) || pidNum <= 0) {
+        const err = new Error('patientId must be a positive integer.');
+        err.status = 400;
+        throw err;
+      }
+      this.activeEspConfig.patientId = pidNum;
+    }
+
+    // Validate pollingIntervalMs if provided
+    if (pollingIntervalMs !== undefined) {
+      const intervalNum = Number(pollingIntervalMs);
+      if (!Number.isFinite(intervalNum) || !Number.isInteger(intervalNum) || intervalNum < 500) {
+        const err = new Error('pollingIntervalMs must be an integer >= 500.');
+        err.status = 400;
+        throw err;
+      }
+      this.activeEspConfig.pollingIntervalMs = intervalNum;
+    }
+
+    // Validate isPolling if provided
+    if (isPolling !== undefined) {
+      if (typeof isPolling !== 'boolean' && isPolling !== 0 && isPolling !== 1) {
+        const err = new Error('isPolling must be a boolean.');
+        err.status = 400;
+        throw err;
+      }
+      this.activeEspConfig.isPolling = Boolean(isPolling);
+    }
 
     this.startEspPoller();
 

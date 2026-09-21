@@ -2,7 +2,7 @@
  * Centralized Error Handling Middleware for SWASTHYAEDGE.
  *
  * Ensures errors are logged gracefully and clean JSON responses
- * are returned without exposing server stack traces or crashing the process.
+ * are returned without exposing server stack traces or internal DB details in production.
  */
 
 function errorHandler(err, req, res, _next) {
@@ -11,8 +11,13 @@ function errorHandler(err, req, res, _next) {
 
   console.error(`[ERROR] [${req.method} ${req.url}]:`, err.message || err);
 
+  // In production, internal server errors (500) return safe generic message
+  const errorMessage = (status >= 500 && !isDev)
+    ? 'Internal server error occurred.'
+    : (err.message || 'Internal server error occurred.');
+
   res.status(status).json({
-    error: err.message || 'Internal server error occurred.',
+    error: errorMessage,
     ...(isDev && err.stack ? { details: err.message } : {})
   });
 }

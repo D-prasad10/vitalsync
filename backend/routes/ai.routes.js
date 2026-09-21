@@ -1,9 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const aiService = require('../services/ai.service');
+const { authenticate } = require('../middleware/auth.middleware');
 
 // GET /api/ai/predictions/:patientId — retrieve AI risk predictions for a patient
-router.get('/api/ai/predictions/:patientId', async (req, res, next) => {
+router.get('/api/ai/predictions/:patientId', authenticate, async (req, res, next) => {
   try {
     const patientId = Number(req.params.patientId);
     const limit = req.query.limit ? Number(req.query.limit) : 20;
@@ -15,7 +16,7 @@ router.get('/api/ai/predictions/:patientId', async (req, res, next) => {
 });
 
 // GET /api/ai/status — check connection status with the external AI Engine
-router.get('/api/ai/status', async (req, res, next) => {
+router.get('/api/ai/status', authenticate, async (req, res, next) => {
   try {
     const status = await aiService.getStatus();
     res.json(status);
