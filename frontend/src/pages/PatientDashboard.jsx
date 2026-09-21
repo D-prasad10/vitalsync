@@ -9,7 +9,7 @@ import SensorGraph from '../components/SensorGraph';
 import { useRealtimeData, seedPatientTelemetry } from '../utils/telemetryStore';
 
 const FieldBlock = ({ label, value, editing, name, onChange, type = 'text', children }) => (
-  <div className="glass-panel" style={{ padding: '1rem', background: 'rgba(0,0,0,0.15)' }}>
+  <div className="glass-panel" style={{ padding: '1rem', background: '#f8fafc', border: '1px solid var(--border-light)' }}>
     <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>
       {label}
     </div>
@@ -168,7 +168,7 @@ const PatientDashboard = () => {
       {/* ── Page Title Header ────────────────────────────────────────────── */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.75rem', flexWrap: 'wrap', gap: '1rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <div style={{ width: '42px', height: '42px', borderRadius: '12px', background: 'rgba(0,210,255,0.1)', border: '1px solid rgba(0,210,255,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ width: '42px', height: '42px', borderRadius: '12px', background: 'var(--accent-gradient-subtle)', border: '1px solid var(--teal-border)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Users size={24} style={{ color: 'var(--accent-primary)' }} />
           </div>
           <div>
@@ -304,10 +304,10 @@ const PatientDashboard = () => {
             </div>
 
             {/* 2. Emergency / SOS Callout Bar */}
-            <div className="glass-panel" style={{ padding: '1.25rem 1.5rem', background: healthStatus.status === 'Critical' ? 'rgba(255,77,79,0.1)' : 'rgba(0,0,0,0.15)', border: `1px solid ${healthStatus.status === 'Critical' ? 'rgba(255,77,79,0.3)' : 'var(--glass-border)'}` }}>
+            <div className="glass-panel" style={{ padding: '1.25rem 1.5rem', background: healthStatus.status === 'Critical' ? '#fee2e2' : '#f8fafc', border: `1px solid ${healthStatus.status === 'Critical' ? '#fecaca' : 'var(--border-light)'}` }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
-                  <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: healthStatus.status === 'Critical' ? 'rgba(255,77,79,0.2)' : 'rgba(255,193,7,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: healthStatus.status === 'Critical' ? '#fecaca' : '#fef3c7', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                     <ShieldAlert size={22} style={{ color: healthStatus.status === 'Critical' ? 'var(--danger)' : 'var(--warning)' }} />
                   </div>
                   <div>
@@ -486,7 +486,7 @@ const PatientDashboard = () => {
               </div>
 
               {/* Contact Block */}
-              <div className="glass-panel" style={{ padding: '1.25rem', background: 'rgba(0,0,0,0.15)', marginBottom: '1.5rem' }}>
+              <div className="glass-panel" style={{ padding: '1.25rem', background: '#f8fafc', border: '1px solid var(--border-light)', marginBottom: '1.5rem' }}>
                 <div style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '1rem' }}>Contact Information</div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1rem' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -511,8 +511,8 @@ const PatientDashboard = () => {
               </div>
 
               {/* Assigned Doctor Card */}
-              <div className="glass-panel" style={{ padding: '1.5rem', background: 'rgba(0,210,255,0.03)', border: '1px solid rgba(0,210,255,0.18)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem', paddingBottom: '0.75rem', borderBottom: '1px solid var(--glass-border)' }}>
+              <div className="glass-panel" style={{ padding: '1.5rem', background: '#eff6ff', border: '1px solid #bfdbfe' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem', paddingBottom: '0.75rem', borderBottom: '1px solid var(--border-light)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
                     <Stethoscope size={20} style={{ color: 'var(--accent-primary)' }} />
                     <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: 'var(--accent-primary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Assigned Primary Doctor</h4>
@@ -524,7 +524,7 @@ const PatientDashboard = () => {
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', gridColumn: '1 / -1', marginBottom: '0.25rem' }}>
-                    <div style={{ width: '50px', height: '50px', borderRadius: '50%', background: 'linear-gradient(135deg, #007cf0, #00d2ff)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <div style={{ width: '50px', height: '50px', borderRadius: '50%', background: 'var(--accent-gradient)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                       <Stethoscope size={24} color="#fff" />
                     </div>
                     <div>
@@ -541,7 +541,7 @@ const PatientDashboard = () => {
                     </div>
                   </div>
 
-                  <div className="glass-panel" style={{ padding: '0.85rem 1rem', background: 'rgba(0,0,0,0.15)' }}>
+                  <div className="glass-panel" style={{ padding: '0.85rem 1rem', background: '#ffffff', border: '1px solid var(--border-light)' }}>
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                       <Phone size={12} /> Direct Line
                     </div>
@@ -552,7 +552,7 @@ const PatientDashboard = () => {
                     )}
                   </div>
 
-                  <div className="glass-panel" style={{ padding: '0.85rem 1rem', background: 'rgba(0,0,0,0.15)' }}>
+                  <div className="glass-panel" style={{ padding: '0.85rem 1rem', background: '#ffffff', border: '1px solid var(--border-light)' }}>
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                       <Mail size={12} /> Email Address
                     </div>

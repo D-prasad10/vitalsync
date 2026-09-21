@@ -272,7 +272,7 @@ const CaretakerDashboard = () => {
                     unit="%"
                     dataPoints={currentRealtimeData}
                     dataKey="humidity"
-                    color="#00d2ff"
+                    color="var(--accent-primary)"
                     yMin={10}
                     yMax={100}
                     displayValue={latestPoint.humidity != null ? `${latestPoint.humidity}%` : '--'}
@@ -289,7 +289,7 @@ const CaretakerDashboard = () => {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.25rem' }}>
 
                   {/* Guardian Contact Card */}
-                  <div className="glass-panel" style={{ padding: '1.25rem', background: 'rgba(255,193,7,0.04)', border: '1px solid rgba(255,193,7,0.25)' }}>
+                  <div className="glass-panel" style={{ padding: '1.25rem', background: '#fffbeb', border: '1px solid #fde68a' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                         <ShieldAlert size={16} style={{ color: 'var(--warning)' }} />
@@ -301,7 +301,7 @@ const CaretakerDashboard = () => {
                       {!contactEdit.guardian ? (
                         <button
                           onClick={() => setContactEdit(p => ({ ...p, guardian: true }))}
-                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.75rem', padding: '2px 6px', borderRadius: '4px' }}
+                          style={{ background: '#ffffff', border: '1px solid #fde68a', cursor: 'pointer', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.75rem', padding: '3px 8px', borderRadius: '4px' }}
                         >
                           <Pencil size={12} /> Edit
                         </button>
@@ -309,7 +309,7 @@ const CaretakerDashboard = () => {
                         <div style={{ display: 'flex', gap: '0.35rem' }}>
                           <button
                             onClick={() => saveContact('guardian')}
-                            style={{ background: 'rgba(32,201,151,0.15)', border: '1px solid rgba(32,201,151,0.3)', color: 'var(--success)', borderRadius: '4px', padding: '2px 8px', cursor: 'pointer', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+                            style={{ background: 'var(--success-bg)', border: '1px solid var(--success-border)', color: 'var(--success)', borderRadius: '4px', padding: '2px 8px', cursor: 'pointer', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
                           >
                             <Check size={12} /> Save
                           </button>
@@ -318,7 +318,7 @@ const CaretakerDashboard = () => {
                               setContactValues(v => ({ ...v, guardian_contact: activePatient.guardian_contact || '' }));
                               setContactEdit(p => ({ ...p, guardian: false }));
                             }}
-                            style={{ background: 'rgba(255,77,79,0.1)', border: '1px solid rgba(255,77,79,0.2)', color: 'var(--danger)', borderRadius: '4px', padding: '2px 6px', cursor: 'pointer', fontSize: '0.75rem' }}
+                            style={{ background: 'var(--danger-bg)', border: '1px solid var(--danger-border)', color: 'var(--danger)', borderRadius: '4px', padding: '2px 6px', cursor: 'pointer', fontSize: '0.75rem' }}
                           >
                             <X size={12} />
                           </button>
@@ -344,7 +344,7 @@ const CaretakerDashboard = () => {
                       <a
                         href={`tel:${activePatient.guardian_contact}`}
                         className="btn-secondary"
-                        style={{ width: '100%', borderColor: 'rgba(255,193,7,0.3)', color: 'var(--warning)', background: 'rgba(255,193,7,0.1)', minHeight: '40px' }}
+                        style={{ width: '100%', borderColor: 'rgba(217, 119, 6, 0.3)', color: '#b45309', background: '#fef3c7', minHeight: '40px' }}
                       >
                         <PhoneCall size={15} /> Call Guardian
                       </a>
@@ -352,7 +352,7 @@ const CaretakerDashboard = () => {
                   </div>
 
                   {/* Doctor Contact Card */}
-                  <div className="glass-panel" style={{ padding: '1.25rem', background: 'rgba(0,210,255,0.04)', border: '1px solid rgba(0,210,255,0.25)' }}>
+                  <div className="glass-panel" style={{ padding: '1.25rem', background: '#eff6ff', border: '1px solid #bfdbfe' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                         <Stethoscope size={16} style={{ color: 'var(--accent-primary)' }} />

@@ -20,7 +20,6 @@ const ProtectedRoute = ({ user, requiredRole, allowedRoles, children }) => {
   const currentUser = getStoredUser() || user;
 
   if (!currentUser) {
-    console.warn('[AUTH] ProtectedRoute: No authenticated user session found, redirecting to /login');
     return <Navigate to="/login" replace />;
   }
 
@@ -30,13 +29,11 @@ const ProtectedRoute = ({ user, requiredRole, allowedRoles, children }) => {
   if (allowedRoles) {
     const normalizedAllowed = allowedRoles.map(r => r.toLowerCase().trim());
     if (!normalizedAllowed.includes(role)) {
-      console.warn(`[AUTH] ProtectedRoute: Role "${role}" not in allowedRoles [${normalizedAllowed.join(', ')}], redirecting to ${targetHome}`);
       return <Navigate to={targetHome} replace />;
     }
   } else if (requiredRole) {
     const normalizedRequired = requiredRole.toLowerCase().trim();
     if (role !== normalizedRequired && role !== 'doctor') {
-      console.warn(`[AUTH] ProtectedRoute: Role "${role}" does not match required "${normalizedRequired}", redirecting to ${targetHome}`);
       return <Navigate to={targetHome} replace />;
     }
   }
@@ -158,6 +155,15 @@ function App() {
 
               <Route
                 path="/reports"
+                element={
+                  <ProtectedRoute user={currentUser}>
+                    <Reports />
+                  </ProtectedRoute>
+                }
+              />
+
+              <Route
+                path="/management"
                 element={
                   <ProtectedRoute user={currentUser}>
                     <Reports />

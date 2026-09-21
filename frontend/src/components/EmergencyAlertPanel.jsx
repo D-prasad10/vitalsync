@@ -28,14 +28,14 @@ export const AlertCard = memo(({ alert, onDismiss }) => {
     },
     info: {
       icon: Info,
-      color: '#00d2ff',
+      color: '#0d9488',
       label: 'INFO',
       cardClass: 'card-info',
       badgeClass: 'toast-badge-info'
     },
     success: {
       icon: CheckCircle2,
-      color: '#20c997',
+      color: '#059669',
       label: 'RESOLVED',
       cardClass: 'card-success',
       badgeClass: 'toast-badge-success'

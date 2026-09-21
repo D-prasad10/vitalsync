@@ -5,9 +5,9 @@ import PatientCard from '../components/PatientCard';
 import { useRealtimeData, seedPatientTelemetry } from '../utils/telemetryStore';
 
 const DetailRow = ({ label, value }) => (
-  <div className="glass-panel" style={{ padding: '0.9rem 1.1rem', background: 'rgba(0,0,0,0.15)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+  <div className="glass-panel" style={{ padding: '0.9rem 1.1rem', background: '#f8fafc', border: '1px solid var(--border-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
     <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{label}</span>
-    <span style={{ fontWeight: 600, fontSize: '0.95rem' }}>{value || '—'}</span>
+    <span style={{ fontWeight: 600, fontSize: '0.95rem', color: 'var(--text-primary)' }}>{value || '—'}</span>
   </div>
 );
 
@@ -91,7 +91,7 @@ const PatientInfo = () => {
     <div className="fade-in">
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <div style={{ width: '42px', height: '42px', borderRadius: '12px', background: 'rgba(0,210,255,0.1)', border: '1px solid rgba(0,210,255,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ width: '42px', height: '42px', borderRadius: '12px', background: 'var(--accent-gradient-subtle)', border: '1px solid var(--teal-border)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Users size={24} style={{ color: 'var(--accent-primary)' }} />
           </div>
           <div>
@@ -154,7 +154,7 @@ const PatientInfo = () => {
           <div className="glass-panel" style={{ padding: '2rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2rem', paddingBottom: '1.5rem', borderBottom: '1px solid var(--glass-border)', flexWrap: 'wrap', gap: '1.25rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
-                <div style={{ width: '72px', height: '72px', borderRadius: '50%', background: 'linear-gradient(135deg, var(--accent-secondary), var(--accent-primary))', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', flexShrink: 0, fontWeight: 700, fontSize: '1.4rem' }}>
+                <div style={{ width: '72px', height: '72px', borderRadius: '50%', background: 'var(--accent-gradient)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', flexShrink: 0, fontWeight: 700, fontSize: '1.4rem' }}>
                   {initials}
                 </div>
                 <div>

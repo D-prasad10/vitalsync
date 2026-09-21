@@ -865,7 +865,8 @@ const DoctorDashboard = () => {
                       style={{
                         padding: '0.85rem',
                         borderRadius: '10px',
-                        background: 'rgba(0,0,0,0.25)',
+                        background: '#f8fafc',
+                        border: '1px solid var(--border-light)',
                         borderLeft: `4px solid ${reminder.status === 'Completed' ? 'var(--success)' : 'var(--warning)'}`
                       }}
                     >
@@ -900,8 +901,8 @@ const DoctorDashboard = () => {
                   <Settings size={18} /> Safety Thresholds
                 </h2>
                 <form onSubmit={saveThresholds} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  <div style={{ background: 'rgba(0,0,0,0.25)', padding: '0.75rem', borderRadius: '8px', borderLeft: '3px solid #ff4d4f' }}>
-                    <label style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: '#ff4d4f', fontWeight: 600, marginBottom: '0.4rem' }}>
+                  <div style={{ background: '#fffbeb', padding: '0.75rem', borderRadius: '8px', border: '1px solid #fde68a', borderLeft: '3px solid #dc2626' }}>
+                    <label style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: '#dc2626', fontWeight: 600, marginBottom: '0.4rem' }}>
                       Heart Rate Limits (BPM)
                     </label>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
@@ -910,8 +911,8 @@ const DoctorDashboard = () => {
                     </div>
                   </div>
 
-                  <div style={{ background: 'rgba(0,0,0,0.25)', padding: '0.75rem', borderRadius: '8px', borderLeft: '3px solid #ffc107' }}>
-                    <label style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: '#ffc107', fontWeight: 600, marginBottom: '0.4rem' }}>
+                  <div style={{ background: '#fffbeb', padding: '0.75rem', borderRadius: '8px', border: '1px solid #fde68a', borderLeft: '3px solid #d97706' }}>
+                    <label style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: '#d97706', fontWeight: 600, marginBottom: '0.4rem' }}>
                       Max Systolic/Diastolic (mmHg)
                     </label>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
@@ -964,9 +965,9 @@ const DoctorDashboard = () => {
 
       {/* ── ADD PATIENT MODAL ────────────────────────────────────────────── */}
       {isAddModalOpen && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '1rem' }}>
-          <div className="glass-panel fade-in" style={{ padding: '2rem', width: '100%', maxWidth: '520px', position: 'relative', border: '1px solid var(--accent-primary)' }}>
-            <h2 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '1.5rem', borderBottom: '1px solid var(--glass-border)', paddingBottom: '0.75rem', color: 'var(--accent-primary)' }}>
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15, 23, 42, 0.45)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '1rem' }}>
+          <div className="glass-panel fade-in" style={{ padding: '2rem', width: '100%', maxWidth: '520px', position: 'relative', border: '1px solid var(--border-light)', boxShadow: 'var(--shadow-dropdown)', borderRadius: '16px', background: '#ffffff' }}>
+            <h2 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '1.5rem', borderBottom: '1px solid var(--border-light)', paddingBottom: '0.75rem', color: 'var(--accent-primary)' }}>
               Register New Patient Record
             </h2>
 
@@ -1012,7 +1013,7 @@ const DoctorDashboard = () => {
               </div>
 
               <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginTop: '1rem' }}>
-                <button type="button" onClick={() => setIsAddModalOpen(false)} style={{ background: 'transparent', border: '1px solid var(--glass-border)', color: 'var(--text-secondary)', padding: '0.6rem 1.25rem', borderRadius: '8px', cursor: 'pointer' }}>Cancel</button>
+                <button type="button" onClick={() => setIsAddModalOpen(false)} style={{ background: '#ffffff', border: '1px solid var(--border-light)', color: 'var(--text-secondary)', padding: '0.6rem 1.25rem', borderRadius: '8px', cursor: 'pointer', fontWeight: 500 }}>Cancel</button>
                 <button type="submit" className="btn-primary">Register Patient</button>
               </div>
             </form>
@@ -1022,9 +1023,9 @@ const DoctorDashboard = () => {
 
       {/* ── ESP8266 HARDWARE CONNECTION MODAL ────────────────────────────── */}
       {showHardwareModal && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.78)', backdropFilter: 'blur(5px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '1rem' }}>
-          <div className="glass-panel fade-in" style={{ padding: '2rem', width: '100%', maxWidth: '580px', position: 'relative', border: '1px solid var(--accent-primary)', maxHeight: '90vh', overflowY: 'auto' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid var(--glass-border)', paddingBottom: '0.75rem' }}>
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15, 23, 42, 0.45)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '1rem' }}>
+          <div className="glass-panel fade-in" style={{ padding: '2rem', width: '100%', maxWidth: '580px', position: 'relative', border: '1px solid var(--border-light)', boxShadow: 'var(--shadow-dropdown)', borderRadius: '16px', background: '#ffffff', maxHeight: '90vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid var(--border-light)', paddingBottom: '0.75rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
                 <Cpu size={22} color="var(--accent-primary)" />
                 <h2 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
@@ -1036,7 +1037,7 @@ const DoctorDashboard = () => {
               </button>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.85rem 1rem', background: deviceStatus.online ? 'rgba(32, 201, 151, 0.12)' : 'rgba(255, 193, 7, 0.12)', border: `1px solid ${deviceStatus.online ? 'var(--status-stable)' : 'var(--warning)'}`, borderRadius: '10px', marginBottom: '1.25rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.85rem 1rem', background: deviceStatus.online ? 'var(--success-bg)' : 'var(--warning-bg)', border: `1px solid ${deviceStatus.online ? 'var(--success-border)' : 'var(--warning-border)'}`, borderRadius: '10px', marginBottom: '1.25rem' }}>
               <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: deviceStatus.online ? 'var(--status-stable)' : 'var(--warning)', boxShadow: deviceStatus.online ? '0 0 8px var(--status-stable)' : 'none' }} />
               <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: 700, fontSize: '0.9rem', color: deviceStatus.online ? 'var(--status-stable)' : 'var(--warning)' }}>
@@ -1054,7 +1055,7 @@ const DoctorDashboard = () => {
                 Option A: Connect via ESP8266 Web Server IP
               </label>
               <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', margin: '0 0 0.75rem 0' }}>
-                If your ESP8266 serves <code>GET /data</code> on your Wi-Fi, enter its IP address below. Vitalsync will automatically poll it every 1.5 seconds.
+                If your ESP8266 serves <code>GET /data</code> on your Wi-Fi, enter its IP address below. MediResQ will automatically poll it every 1.5 seconds.
               </p>
               <div style={{ display: 'flex', gap: '0.5rem' }}>
                 <input
@@ -1077,20 +1078,20 @@ const DoctorDashboard = () => {
             </form>
 
             {/* Mode 2: ESP8266 HTTP POST Address */}
-            <div style={{ padding: '1rem', background: 'rgba(0, 210, 255, 0.05)', border: '1px solid rgba(0, 210, 255, 0.2)', borderRadius: '10px', marginBottom: '1.5rem' }}>
-              <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--accent-primary)', marginBottom: '0.35rem' }}>
+            <div style={{ padding: '1rem', background: '#f0fdfa', border: '1px solid #ccfbf1', borderRadius: '10px', marginBottom: '1.5rem' }}>
+              <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--accent-secondary)', marginBottom: '0.35rem' }}>
                 Option B: ESP8266 Direct HTTP POST Address
               </div>
               <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: '0 0 0.5rem 0' }}>
                 If your ESP8266 Arduino code is configured to POST JSON packets directly, configure it to send to this Local Wi-Fi address:
               </p>
-              <div style={{ background: 'rgba(0,0,0,0.4)', padding: '0.5rem 0.75rem', borderRadius: '6px', fontFamily: 'monospace', fontSize: '0.82rem', color: '#00d2ff', wordBreak: 'break-all', userSelect: 'all' }}>
+              <div style={{ background: '#ffffff', border: '1px solid #cbd5e1', padding: '0.5rem 0.75rem', borderRadius: '6px', fontFamily: 'monospace', fontSize: '0.82rem', color: 'var(--accent-primary)', wordBreak: 'break-all', userSelect: 'all' }}>
                 {hardwareConfig.lanIngestionUrl || `http://${window.location.hostname}:5001/api/telemetry/esp8266`}
               </div>
             </div>
 
             {/* Test Hardware Pulse */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '1rem', borderTop: '1px solid var(--glass-border)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '1rem', borderTop: '1px solid var(--border-light)' }}>
               <button
                 type="button"
                 onClick={handleTriggerTestPulse}

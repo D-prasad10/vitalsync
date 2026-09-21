@@ -1,5 +1,5 @@
 /**
- * Authentication and session persistence utilities for Vitalsync.
+ * Authentication and session persistence utilities for MediResQ.
  */
 
 export const getStoredUser = () => {
@@ -23,7 +23,7 @@ export const roleHome = (user) => {
   const role = (user.role || '').toLowerCase().trim();
   if (role === 'doctor') return '/doctor';
   if (role === 'caretaker') return '/caretaker';
-  if (role === 'staff') return '/staff';
+  if (role === 'staff') return '/staff-management';
   if (role === 'patient') return '/patient-dashboard';
   return '/patient-dashboard';
 };

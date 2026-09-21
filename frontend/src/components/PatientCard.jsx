@@ -50,8 +50,8 @@ const PatientCard = ({
           textAlign: 'left',
           cursor: 'pointer',
           border: '1px solid',
-          borderColor: isSelected ? 'var(--accent-primary)' : 'var(--glass-border)',
-          background: isSelected ? 'rgba(0, 210, 255, 0.08)' : 'var(--bg-panel)',
+          borderColor: isSelected ? 'var(--accent-primary)' : 'var(--border-light)',
+          background: isSelected ? 'rgba(37, 99, 235, 0.08)' : '#ffffff',
           borderRadius: '10px',
           transition: 'all 0.2s ease',
           display: 'flex',
@@ -146,7 +146,7 @@ const PatientCard = ({
       aria-label={`Patient ${patient.name}, Room ${patient.room_number || 'N/A'}, Health Status: ${status}`}
       style={{
         borderColor: isSelected ? 'var(--accent-primary)' : undefined,
-        background: isSelected ? 'rgba(0, 210, 255, 0.06)' : undefined,
+        background: isSelected ? 'rgba(37, 99, 235, 0.06)' : undefined,
         cursor: 'pointer'
       }}
     >
@@ -209,15 +209,15 @@ const PatientCard = ({
           <span>{hrLabel}</span>
         </div>
         <div className="mini-vital" title={spo2Title}>
-          <Wind color="#00d2ff" />
+          <Wind color="#0d9488" />
           <span>{spo2Label}</span>
         </div>
         <div className="mini-vital" title={tempTitle}>
-          <Thermometer color="#20c997" />
+          <Thermometer color="#059669" />
           <span>{tempDisplay}</span>
         </div>
         <div className="mini-vital" title={ecgBpTitle}>
-          <Activity color="#ffc107" />
+          <Activity color="#d97706" />
           <span>{ecgBpDisplay}</span>
         </div>
       </div>
