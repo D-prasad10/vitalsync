@@ -232,80 +232,82 @@ const HealthScorePanel = ({ currentData, historyData }) => {
   }), []);
 
   return (
-    <div className="glass-panel" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.5rem', background: '#ffffff', border: '1px solid var(--border-light)', borderRadius: '12px', boxShadow: 'var(--shadow-sm)' }}>
-      
-      {/* Header & Score Section */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '2rem', alignItems: 'center' }}>
-        <CircularProgress score={score} />
-        <div>
-          <h2 style={{ margin: '0 0 0.5rem 0', fontSize: '1.4rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-            Overall Health: <span style={{ color: score < 50 ? '#ef4444' : score < 80 ? '#f59e0b' : '#10b981' }}>{scoreStatus}</span>
-          </h2>
-          <div style={{ background: '#f8fafc', padding: '0.85rem 1rem', borderRadius: '8px', border: '1px solid var(--border-light)', borderLeft: `4px solid ${score < 50 ? '#ef4444' : score < 80 ? '#f59e0b' : '#10b981'}` }}>
-            <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-              <strong style={{ color: 'var(--text-primary)' }}>Tip:</strong> {tip}
-            </p>
+    <div className="glass-panel health-score-panel-card" style={{ padding: '1.25rem 1.5rem', background: '#ffffff', border: '1px solid var(--border-light)', borderRadius: '12px', boxShadow: 'var(--shadow-sm)' }}>
+      <div className="health-score-grid">
+        {/* Left Column: Overall Health Score & Vitals Breakdown */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.15rem' }}>
+          {/* Score & Tip Row */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
+            <CircularProgress score={score} />
+            <div style={{ flex: 1 }}>
+              <h2 style={{ margin: '0 0 0.35rem 0', fontSize: '1.25rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                Overall Health: <span style={{ color: score < 50 ? '#ef4444' : score < 80 ? '#f59e0b' : '#10b981' }}>{scoreStatus}</span>
+              </h2>
+              <div style={{ background: '#f8fafc', padding: '0.65rem 0.85rem', borderRadius: '8px', border: '1px solid var(--border-light)', borderLeft: `4px solid ${score < 50 ? '#ef4444' : score < 80 ? '#f59e0b' : '#10b981'}` }}>
+                <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                  <strong style={{ color: 'var(--text-primary)' }}>Tip:</strong> {tip}
+                </p>
+              </div>
+            </div>
           </div>
+
+          {/* Vitals Status Table */}
+          <div>
+            <h3 style={{ fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.5rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Vitals Status Breakdown</h3>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--border-light)', color: 'var(--text-secondary)', textAlign: 'left' }}>
+                  <th style={{ padding: '0.45rem 0', fontWeight: 600 }}>Vital Sign</th>
+                  <th style={{ padding: '0.45rem 0', textAlign: 'right', fontWeight: 600 }}>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr style={{ borderBottom: '1px solid var(--border-light)' }}>
+                  <td style={{ padding: '0.45rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-primary)', fontWeight: 500 }}>
+                    <HeartPulse size={15} color="#ef4444" /> Heart Rate
+                  </td>
+                  <td style={{ padding: '0.45rem 0', textAlign: 'right', color: hrStatus.color, fontWeight: 600 }}>{hrStatus.text}</td>
+                </tr>
+                <tr style={{ borderBottom: '1px solid var(--border-light)' }}>
+                  <td style={{ padding: '0.45rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-primary)', fontWeight: 500 }}>
+                    <Activity size={15} color="#f59e0b" /> Blood Pressure
+                  </td>
+                  <td style={{ padding: '0.45rem 0', textAlign: 'right', color: bpStatus.color, fontWeight: 600 }}>{bpStatus.text}</td>
+                </tr>
+                <tr style={{ borderBottom: '1px solid var(--border-light)' }}>
+                  <td style={{ padding: '0.45rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-primary)', fontWeight: 500 }}>
+                    <Thermometer size={15} color="#0d9488" /> Temperature
+                  </td>
+                  <td style={{ padding: '0.45rem 0', textAlign: 'right', color: tempStatus.color, fontWeight: 600 }}>{tempStatus.text}</td>
+                </tr>
+                <tr>
+                  <td style={{ padding: '0.45rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-primary)', fontWeight: 500 }}>
+                    <Wind size={15} color="#2563eb" /> Oxygen Level (SpO2)
+                  </td>
+                  <td style={{ padding: '0.45rem 0', textAlign: 'right', color: spo2Status.color, fontWeight: 600 }}>{spo2Status.text}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Right Column: 7-Day History Chart */}
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: '260px' }}>
+          {chartData && chartData.labels.length > 0 ? (
+            <div style={{ flex: 1, width: '100%', minHeight: '260px', background: '#f8fafc', padding: '0.85rem', borderRadius: '8px', border: '1px solid var(--border-light)' }}>
+              <Line data={chartData} options={chartOptions} redraw={false} />
+            </div>
+          ) : (
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '1.5rem', textAlign: 'center', background: '#f8fafc', borderRadius: '8px', border: '1px solid var(--border-light)', color: 'var(--text-secondary)' }}>
+              <h4 style={{ fontSize: '0.9rem', marginBottom: '0.25rem', color: 'var(--text-primary)', fontWeight: 600 }}>Previous Score Trend of 7 Days</h4>
+              <span style={{ fontSize: '0.8rem' }}>Gathering 7-day health score data...</span>
+            </div>
+          )}
         </div>
       </div>
-
-      {/* Vitals Status Table */}
-      <div>
-        <h3 style={{ fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Vitals Status Breakdown</h3>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
-          <thead>
-            <tr style={{ borderBottom: '1px solid var(--border-light)', color: 'var(--text-secondary)', textAlign: 'left' }}>
-              <th style={{ padding: '0.65rem 0', fontWeight: 600 }}>Vital Sign</th>
-              <th style={{ padding: '0.65rem 0', textAlign: 'right', fontWeight: 600 }}>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr style={{ borderBottom: '1px solid var(--border-light)' }}>
-              <td style={{ padding: '0.65rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-primary)', fontWeight: 500 }}>
-                <HeartPulse size={16} color="#ef4444" /> Heart Rate
-              </td>
-              <td style={{ padding: '0.65rem 0', textAlign: 'right', color: hrStatus.color, fontWeight: 600 }}>{hrStatus.text}</td>
-            </tr>
-            <tr style={{ borderBottom: '1px solid var(--border-light)' }}>
-              <td style={{ padding: '0.65rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-primary)', fontWeight: 500 }}>
-                <Activity size={16} color="#f59e0b" /> Blood Pressure
-              </td>
-              <td style={{ padding: '0.65rem 0', textAlign: 'right', color: bpStatus.color, fontWeight: 600 }}>{bpStatus.text}</td>
-            </tr>
-            <tr style={{ borderBottom: '1px solid var(--border-light)' }}>
-              <td style={{ padding: '0.65rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-primary)', fontWeight: 500 }}>
-                <Thermometer size={16} color="#0d9488" /> Temperature
-              </td>
-              <td style={{ padding: '0.65rem 0', textAlign: 'right', color: tempStatus.color, fontWeight: 600 }}>{tempStatus.text}</td>
-            </tr>
-            <tr>
-              <td style={{ padding: '0.65rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-primary)', fontWeight: 500 }}>
-                <Wind size={16} color="#2563eb" /> Oxygen Level (SpO2)
-              </td>
-              <td style={{ padding: '0.65rem 0', textAlign: 'right', color: spo2Status.color, fontWeight: 600 }}>{spo2Status.text}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      {/* History Chart */}
-      {chartData && chartData.labels.length > 0 ? (
-        <div style={{ marginTop: '0.5rem' }}>
-          <div style={{ height: '240px', width: '100%', background: '#f8fafc', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-light)' }}>
-            <Line data={chartData} options={chartOptions} redraw={false} />
-          </div>
-        </div>
-      ) : (
-        <div style={{ marginTop: '0.5rem' }}>
-          <h3 style={{ fontSize: '1rem', marginBottom: '0.75rem', color: 'var(--text-primary)', textAlign: 'center', fontWeight: 600 }}>Previous Score Trend of 7 Days</h3>
-          <div style={{ padding: '2rem', textAlign: 'center', background: '#f8fafc', borderRadius: '8px', border: '1px solid var(--border-light)', color: 'var(--text-secondary)' }}>
-            Gathering 7-day health score data...
-          </div>
-        </div>
-      )}
-
     </div>
   );
 };
 
 export default React.memo(HealthScorePanel);
+

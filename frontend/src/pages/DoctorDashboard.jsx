@@ -965,8 +965,8 @@ const DoctorDashboard = () => {
 
       {/* ── ADD PATIENT MODAL ────────────────────────────────────────────── */}
       {isAddModalOpen && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15, 23, 42, 0.45)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '1rem' }}>
-          <div className="glass-panel fade-in" style={{ padding: '2rem', width: '100%', maxWidth: '520px', position: 'relative', border: '1px solid var(--border-light)', boxShadow: 'var(--shadow-dropdown)', borderRadius: '16px', background: '#ffffff' }}>
+        <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15, 23, 42, 0.45)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '1rem' }}>
+          <div className="glass-panel modal-container" style={{ padding: '2rem', width: '100%', maxWidth: '520px', position: 'relative', border: '1px solid var(--border-light)', boxShadow: 'var(--shadow-dropdown)', borderRadius: '16px', background: '#ffffff' }}>
             <h2 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '1.5rem', borderBottom: '1px solid var(--border-light)', paddingBottom: '0.75rem', color: 'var(--accent-primary)' }}>
               Register New Patient Record
             </h2>
@@ -1023,8 +1023,8 @@ const DoctorDashboard = () => {
 
       {/* ── ESP8266 HARDWARE CONNECTION MODAL ────────────────────────────── */}
       {showHardwareModal && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15, 23, 42, 0.45)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '1rem' }}>
-          <div className="glass-panel fade-in" style={{ padding: '2rem', width: '100%', maxWidth: '580px', position: 'relative', border: '1px solid var(--border-light)', boxShadow: 'var(--shadow-dropdown)', borderRadius: '16px', background: '#ffffff', maxHeight: '90vh', overflowY: 'auto' }}>
+        <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15, 23, 42, 0.45)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '1rem' }}>
+          <div className="glass-panel modal-container" style={{ padding: '2rem', width: '100%', maxWidth: '580px', position: 'relative', border: '1px solid var(--border-light)', boxShadow: 'var(--shadow-dropdown)', borderRadius: '16px', background: '#ffffff', maxHeight: '90vh', overflowY: 'auto' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid var(--border-light)', paddingBottom: '0.75rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
                 <Cpu size={22} color="var(--accent-primary)" />

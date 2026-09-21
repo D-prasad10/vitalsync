@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { Activity, Stethoscope, Users, LogOut, ShieldCheck, FileText, HeartPulse, X } from 'lucide-react';
+import { Activity, Stethoscope, LogOut, ShieldCheck, FileText, HeartPulse, X } from 'lucide-react';
 
 const Sidebar = ({ user, onLogout, isOpen, onClose }) => {
   const location = useLocation();
@@ -24,8 +24,6 @@ const Sidebar = ({ user, onLogout, isOpen, onClose }) => {
   }, [isOpen, onClose]);
 
   if (!user) return null;
-
-  const role = (user.role || '').toLowerCase().trim();
 
   return (
     <>
@@ -63,139 +61,42 @@ const Sidebar = ({ user, onLogout, isOpen, onClose }) => {
         </div>
 
         <nav className="nav-links">
-          {role === 'doctor' && (
-            <>
-              <NavLink
-                to="/doctor"
-                end
-                className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
-                onClick={onClose}
-              >
-                <Stethoscope size={18} />
-                <span>Doctor Dashboard</span>
-              </NavLink>
+          <NavLink
+            to="/doctor"
+            end
+            className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
+            onClick={onClose}
+          >
+            <Stethoscope size={18} />
+            <span>Doctor Dashboard</span>
+          </NavLink>
 
-              <NavLink
-                to="/caretaker"
-                className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
-                onClick={onClose}
-              >
-                <Activity size={18} />
-                <span>Caretaker Station</span>
-              </NavLink>
+          <NavLink
+            to="/caretaker"
+            className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
+            onClick={onClose}
+          >
+            <Activity size={18} />
+            <span>Caretaker Station</span>
+          </NavLink>
 
-              <NavLink
-                to="/patient-dashboard"
-                className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
-                onClick={onClose}
-              >
-                <Users size={18} />
-                <span>Patient</span>
-              </NavLink>
+          <NavLink
+            to="/reports"
+            className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
+            onClick={onClose}
+          >
+            <FileText size={18} />
+            <span>Management</span>
+          </NavLink>
 
-              <NavLink
-                to="/reports"
-                className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
-                onClick={onClose}
-              >
-                <FileText size={18} />
-                <span>Management</span>
-              </NavLink>
-
-              <NavLink
-                to="/staff-management"
-                className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
-                onClick={onClose}
-              >
-                <ShieldCheck size={18} />
-                <span>Staff Management</span>
-              </NavLink>
-            </>
-          )}
-
-          {role === 'caretaker' && (
-            <>
-              <NavLink
-                to="/caretaker"
-                className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
-                onClick={onClose}
-              >
-                <Activity size={18} />
-                <span>Caretaker Station</span>
-              </NavLink>
-
-              <NavLink
-                to="/patient-dashboard"
-                className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
-                onClick={onClose}
-              >
-                <Users size={18} />
-                <span>Patient</span>
-              </NavLink>
-
-              <NavLink
-                to="/reports"
-                className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
-                onClick={onClose}
-              >
-                <FileText size={18} />
-                <span>Management</span>
-              </NavLink>
-            </>
-          )}
-
-          {role === 'staff' && (
-            <>
-              <NavLink
-                to="/staff-management"
-                className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
-                onClick={onClose}
-              >
-                <ShieldCheck size={18} />
-                <span>Staff Management</span>
-              </NavLink>
-
-              <NavLink
-                to="/patient-dashboard"
-                className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
-                onClick={onClose}
-              >
-                <Users size={18} />
-                <span>Patient</span>
-              </NavLink>
-
-              <NavLink
-                to="/reports"
-                className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
-                onClick={onClose}
-              >
-                <FileText size={18} />
-                <span>Management</span>
-              </NavLink>
-            </>
-          )}
-
-          {role !== 'doctor' && role !== 'caretaker' && role !== 'staff' && (
-            <>
-              <NavLink
-                to="/patient-dashboard"
-                className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
-                onClick={onClose}
-              >
-                <Users size={18} />
-                <span>Patient</span>
-              </NavLink>
-
-              <NavLink
-                to="/reports"
-                className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
-                onClick={onClose}
-              >
-                <FileText size={18} />
-                <span>Management</span>
-              </NavLink>
-            </>
-          )}
+          <NavLink
+            to="/staff-management"
+            className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
+            onClick={onClose}
+          >
+            <ShieldCheck size={18} />
+            <span>Staff Management Station</span>
+          </NavLink>
 
           <div className="sidebar-footer">
             <button

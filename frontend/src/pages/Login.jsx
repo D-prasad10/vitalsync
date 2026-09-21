@@ -279,7 +279,6 @@ const Login = ({ onLogin }) => {
                       <option value="doctor">Doctor — Clinical Lead</option>
                       <option value="caretaker">Caretaker — Patient Care</option>
                       <option value="staff">Staff — Hospital Administration</option>
-                      <option value="patient">Patient — Telemetry Portal</option>
                     </select>
                   </div>
                 </div>

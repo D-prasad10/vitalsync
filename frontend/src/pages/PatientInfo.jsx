@@ -113,7 +113,7 @@ const PatientInfo = () => {
             </button>
             <button
               className="btn-primary"
-              onClick={() => navigate('/patient-dashboard')}
+              onClick={() => navigate('/caretaker')}
               style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem' }}
             >
               <Activity size={15} /> Live Telemetry <ArrowRight size={14} />

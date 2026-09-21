@@ -2,7 +2,7 @@ import React from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   HeartPulse, Menu, Bell, LogOut, User,
-  Stethoscope, Activity, Users, FileText, ShieldCheck
+  Stethoscope, Activity, FileText, ShieldCheck
 } from 'lucide-react';
 import { useEmergencyAlerts } from '../utils/telemetryStore';
 
@@ -53,126 +53,38 @@ const TopBar = ({ user, onLogout, onToggleSidebar }) => {
 
       {/* Horizontal Top Navigation Links */}
       <nav className="topbar-center-nav" aria-label="Main Navigation">
-        {role === 'doctor' && (
-          <>
-            <NavLink
-              to="/doctor"
-              end
-              className={({ isActive }) => `topbar-nav-link ${isActive ? 'active' : ''}`}
-            >
-              <Stethoscope size={16} />
-              <span>Doctor Dashboard</span>
-            </NavLink>
+        <NavLink
+          to="/doctor"
+          end
+          className={({ isActive }) => `topbar-nav-link ${isActive ? 'active' : ''}`}
+        >
+          <Stethoscope size={16} />
+          <span>Doctor Dashboard</span>
+        </NavLink>
 
-            <NavLink
-              to="/caretaker"
-              className={({ isActive }) => `topbar-nav-link ${isActive ? 'active' : ''}`}
-            >
-              <Activity size={16} />
-              <span>Caretaker Station</span>
-            </NavLink>
+        <NavLink
+          to="/caretaker"
+          className={({ isActive }) => `topbar-nav-link ${isActive ? 'active' : ''}`}
+        >
+          <Activity size={16} />
+          <span>Caretaker Station</span>
+        </NavLink>
 
-            <NavLink
-              to="/patient-dashboard"
-              className={({ isActive }) => `topbar-nav-link ${isActive ? 'active' : ''}`}
-            >
-              <Users size={16} />
-              <span>Patient</span>
-            </NavLink>
+        <NavLink
+          to="/reports"
+          className={({ isActive }) => `topbar-nav-link ${isActive ? 'active' : ''}`}
+        >
+          <FileText size={16} />
+          <span>Management</span>
+        </NavLink>
 
-            <NavLink
-              to="/reports"
-              className={({ isActive }) => `topbar-nav-link ${isActive ? 'active' : ''}`}
-            >
-              <FileText size={16} />
-              <span>Management</span>
-            </NavLink>
-
-            <NavLink
-              to="/staff-management"
-              className={({ isActive }) => `topbar-nav-link ${isActive ? 'active' : ''}`}
-            >
-              <ShieldCheck size={16} />
-              <span>Staff Management</span>
-            </NavLink>
-          </>
-        )}
-
-        {role === 'caretaker' && (
-          <>
-            <NavLink
-              to="/caretaker"
-              className={({ isActive }) => `topbar-nav-link ${isActive ? 'active' : ''}`}
-            >
-              <Activity size={16} />
-              <span>Caretaker Station</span>
-            </NavLink>
-
-            <NavLink
-              to="/patient-dashboard"
-              className={({ isActive }) => `topbar-nav-link ${isActive ? 'active' : ''}`}
-            >
-              <Users size={16} />
-              <span>Patient</span>
-            </NavLink>
-
-            <NavLink
-              to="/reports"
-              className={({ isActive }) => `topbar-nav-link ${isActive ? 'active' : ''}`}
-            >
-              <FileText size={16} />
-              <span>Management</span>
-            </NavLink>
-          </>
-        )}
-
-        {role === 'staff' && (
-          <>
-            <NavLink
-              to="/staff-management"
-              className={({ isActive }) => `topbar-nav-link ${isActive ? 'active' : ''}`}
-            >
-              <ShieldCheck size={16} />
-              <span>Staff Management</span>
-            </NavLink>
-
-            <NavLink
-              to="/patient-dashboard"
-              className={({ isActive }) => `topbar-nav-link ${isActive ? 'active' : ''}`}
-            >
-              <Users size={16} />
-              <span>Patient</span>
-            </NavLink>
-
-            <NavLink
-              to="/reports"
-              className={({ isActive }) => `topbar-nav-link ${isActive ? 'active' : ''}`}
-            >
-              <FileText size={16} />
-              <span>Management</span>
-            </NavLink>
-          </>
-        )}
-
-        {role !== 'doctor' && role !== 'caretaker' && role !== 'staff' && (
-          <>
-            <NavLink
-              to="/patient-dashboard"
-              className={({ isActive }) => `topbar-nav-link ${isActive ? 'active' : ''}`}
-            >
-              <Users size={16} />
-              <span>Patient</span>
-            </NavLink>
-
-            <NavLink
-              to="/reports"
-              className={({ isActive }) => `topbar-nav-link ${isActive ? 'active' : ''}`}
-            >
-              <FileText size={16} />
-              <span>Management</span>
-            </NavLink>
-          </>
-        )}
+        <NavLink
+          to="/staff-management"
+          className={({ isActive }) => `topbar-nav-link ${isActive ? 'active' : ''}`}
+        >
+          <ShieldCheck size={16} />
+          <span>Staff Management Station</span>
+        </NavLink>
       </nav>
 
       <div className="topbar-right">

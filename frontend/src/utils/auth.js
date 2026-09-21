@@ -24,6 +24,5 @@ export const roleHome = (user) => {
   if (role === 'doctor') return '/doctor';
   if (role === 'caretaker') return '/caretaker';
   if (role === 'staff') return '/staff-management';
-  if (role === 'patient') return '/patient-dashboard';
-  return '/patient-dashboard';
+  return '/caretaker';
 };

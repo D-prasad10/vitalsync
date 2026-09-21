@@ -1,11 +1,10 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useState, useCallback } from 'react';
 import Sidebar from './components/Sidebar';
 import TopBar from './components/TopBar';
 import Login from './pages/Login';
 import DoctorDashboard from './pages/DoctorDashboard';
 import CaretakerDashboard from './pages/CaretakerDashboard';
-import PatientDashboard from './pages/PatientDashboard';
 import PatientInfo from './pages/PatientInfo';
 import StaffManagement from './pages/StaffManagement';
 import Reports from './pages/Reports';
@@ -41,6 +40,117 @@ const ProtectedRoute = ({ user, requiredRole, allowedRoles, children }) => {
   return children;
 };
 
+const AppLayout = ({
+  currentUser,
+  home,
+  handleLogin,
+  handleLogout,
+  toggleSidebar,
+  closeSidebar,
+  sidebarOpen
+}) => {
+  const location = useLocation();
+  const isCaretakerStation = location.pathname === '/caretaker';
+
+  return (
+    <div className={`app-container ${currentUser ? 'authenticated' : ''}`}>
+      {currentUser && (
+        <>
+          <TopBar
+            user={currentUser}
+            onLogout={handleLogout}
+            onToggleSidebar={toggleSidebar}
+          />
+          <Sidebar
+            user={currentUser}
+            onLogout={handleLogout}
+            isOpen={sidebarOpen}
+            onClose={closeSidebar}
+          />
+        </>
+      )}
+
+      <div className={`main-layout ${currentUser ? 'with-topbar' : ''}`}>
+        <main className={`main-content ${isCaretakerStation ? 'caretaker-page-content' : ''}`}>
+          <Routes>
+            <Route
+              path="/login"
+              element={currentUser ? <Navigate to={home} replace /> : <Login onLogin={handleLogin} />}
+            />
+
+            <Route
+              path="/doctor"
+              element={
+                <ProtectedRoute user={currentUser} allowedRoles={['doctor', 'caretaker', 'staff']}>
+                  <DoctorDashboard />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/caretaker"
+              element={
+                <ProtectedRoute user={currentUser} allowedRoles={['caretaker', 'doctor', 'staff']}>
+                  <CaretakerDashboard />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/patient/:id"
+              element={
+                <ProtectedRoute user={currentUser}>
+                  <PatientInfo />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/staff"
+              element={
+                <ProtectedRoute user={currentUser} allowedRoles={['staff', 'doctor', 'caretaker']}>
+                  <StaffManagement />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/staff-management"
+              element={
+                <ProtectedRoute user={currentUser} allowedRoles={['staff', 'doctor', 'caretaker']}>
+                  <StaffManagement />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/reports"
+              element={
+                <ProtectedRoute user={currentUser}>
+                  <Reports />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/management"
+              element={
+                <ProtectedRoute user={currentUser}>
+                  <Reports />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route path="/" element={<Navigate to={home} replace />} />
+            <Route path="*" element={<Navigate to={home} replace />} />
+          </Routes>
+        </main>
+        {currentUser && !isCaretakerStation && <EmergencyAlertPanel />}
+      </div>
+    </div>
+  );
+};
+
 function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [user, setUser] = useState(() => getStoredUser());
@@ -74,112 +184,18 @@ function App() {
 
   return (
     <BrowserRouter>
-      <div className={`app-container ${currentUser ? 'authenticated' : ''}`}>
-        {currentUser && (
-          <>
-            <TopBar
-              user={currentUser}
-              onLogout={handleLogout}
-              onToggleSidebar={toggleSidebar}
-            />
-            <Sidebar
-              user={currentUser}
-              onLogout={handleLogout}
-              isOpen={sidebarOpen}
-              onClose={closeSidebar}
-            />
-          </>
-        )}
-
-        <div className={`main-layout ${currentUser ? 'with-topbar' : ''}`}>
-          <main className="main-content">
-            <Routes>
-              <Route
-                path="/login"
-                element={currentUser ? <Navigate to={home} replace /> : <Login onLogin={handleLogin} />}
-              />
-
-              <Route
-                path="/doctor"
-                element={
-                  <ProtectedRoute user={currentUser} requiredRole="doctor">
-                    <DoctorDashboard />
-                  </ProtectedRoute>
-                }
-              />
-
-              <Route
-                path="/caretaker"
-                element={
-                  <ProtectedRoute user={currentUser} allowedRoles={['caretaker', 'doctor']}>
-                    <CaretakerDashboard />
-                  </ProtectedRoute>
-                }
-              />
-
-              <Route
-                path="/patient-dashboard"
-                element={
-                  <ProtectedRoute user={currentUser}>
-                    <PatientDashboard />
-                  </ProtectedRoute>
-                }
-              />
-
-              <Route
-                path="/patient/:id"
-                element={
-                  <ProtectedRoute user={currentUser}>
-                    <PatientInfo />
-                  </ProtectedRoute>
-                }
-              />
-
-              <Route
-                path="/staff"
-                element={
-                  <ProtectedRoute user={currentUser} allowedRoles={['staff', 'doctor']}>
-                    <StaffManagement />
-                  </ProtectedRoute>
-                }
-              />
-
-              <Route
-                path="/staff-management"
-                element={
-                  <ProtectedRoute user={currentUser} allowedRoles={['staff', 'doctor']}>
-                    <StaffManagement />
-                  </ProtectedRoute>
-                }
-              />
-
-              <Route
-                path="/reports"
-                element={
-                  <ProtectedRoute user={currentUser}>
-                    <Reports />
-                  </ProtectedRoute>
-                }
-              />
-
-              <Route
-                path="/management"
-                element={
-                  <ProtectedRoute user={currentUser}>
-                    <Reports />
-                  </ProtectedRoute>
-                }
-              />
-
-              <Route path="/" element={<Navigate to={home} replace />} />
-              <Route path="*" element={<Navigate to={home} replace />} />
-            </Routes>
-          </main>
-          {currentUser && <EmergencyAlertPanel />}
-        </div>
-      </div>
+      <AppLayout
+        currentUser={currentUser}
+        home={home}
+        handleLogin={handleLogin}
+        handleLogout={handleLogout}
+        toggleSidebar={toggleSidebar}
+        closeSidebar={closeSidebar}
+        sidebarOpen={sidebarOpen}
+      />
     </BrowserRouter>
   );
 }
 
 export default App;
+
