@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { useState, useCallback, memo } from 'react';
+import { useState, useCallback } from 'react';
 import Sidebar from './components/Sidebar';
 import TopBar from './components/TopBar';
 import Login from './pages/Login';
@@ -11,34 +11,9 @@ import StaffManagement from './pages/StaffManagement';
 import Reports from './pages/Reports';
 import EmergencyAlertPanel from './components/EmergencyAlertPanel';
 import { getSocket } from './utils/telemetryStore';
+import { getStoredUser, roleHome } from './utils/auth';
 
 getSocket();
-
-export const getStoredUser = () => {
-  try {
-    const saved = localStorage.getItem('vitals_user');
-    if (!saved) return null;
-    const parsed = JSON.parse(saved);
-    if (!parsed || typeof parsed !== 'object') return null;
-    if (parsed.role) {
-      parsed.role = String(parsed.role).toLowerCase().trim();
-    }
-    return parsed;
-  } catch {
-    localStorage.removeItem('vitals_user');
-    return null;
-  }
-};
-
-export const roleHome = (user) => {
-  if (!user) return '/login';
-  const role = (user.role || '').toLowerCase().trim();
-  if (role === 'doctor') return '/doctor';
-  if (role === 'caretaker') return '/caretaker';
-  if (role === 'staff') return '/staff';
-  if (role === 'patient') return '/patient-dashboard';
-  return '/patient-dashboard';
-};
 
 const ProtectedRoute = ({ user, requiredRole, allowedRoles, children }) => {
   // Always resolve latest persisted session or state to eliminate race conditions

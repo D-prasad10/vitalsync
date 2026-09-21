@@ -3,7 +3,7 @@ import { NavLink, useLocation } from 'react-router-dom';
 import { Activity, Stethoscope, Users, LogOut, ShieldCheck, FileText, HeartPulse, X } from 'lucide-react';
 
 const Sidebar = ({ user, onLogout, isOpen, onClose }) => {
-  const location = useLocation(); // Subscribe to location updates
+  useLocation(); // Subscribe to location updates
   if (!user) return null;
 
   const handleNavClick = () => {

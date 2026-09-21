@@ -912,6 +912,18 @@ input, button, select, textarea {
   }
 }
 
+.modal-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+@media (max-width: 540px) {
+  .modal-form-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
 /* ── 10. CHART CONTAINER SAFETY ───────────────────────────────────────── */
 .chart-card {
   width: 100%;

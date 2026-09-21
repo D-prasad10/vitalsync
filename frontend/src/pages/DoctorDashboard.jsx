@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Search, Filter, ArrowLeft, Heart, Wind, Thermometer, Activity, User, Phone, Stethoscope, Bell, Plus, Trash2, CheckCircle2, AlertTriangle, ShieldAlert, Settings, Waves, Radio, MapPin, Gauge, Cpu, Navigation, Flame } from 'lucide-react';
 import SensorGraph from '../components/SensorGraph';
 import HistoryBarGraph from '../components/HistoryBarGraph';
@@ -262,7 +262,7 @@ const DoctorDashboard = () => {
   };
 
   // Determine health status from real-time stream
-  const getPatientStatusData = (patientId, rtData = globalRealtimeData) => {
+  const getPatientStatusData = useCallback((patientId, rtData = globalRealtimeData) => {
     const data = rtData[patientId];
     if (!data || data.length === 0) return { status: 'Stable', className: 'status-stable', color: 'var(--status-stable)' };
     const latest = data[data.length - 1];
@@ -278,7 +278,7 @@ const DoctorDashboard = () => {
       return { status: 'Warning', className: 'status-warning', color: 'var(--status-warning)' };
     }
     return { status: 'Stable', className: 'status-stable', color: 'var(--status-stable)' };
-  };
+  }, [globalRealtimeData]);
 
   // Clinical Triage KPI aggregations
   const triageStats = useMemo(() => {
@@ -297,7 +297,7 @@ const DoctorDashboard = () => {
       warning,
       critical
     };
-  }, [patients, globalRealtimeData]);
+  }, [patients, globalRealtimeData, getPatientStatusData]);
 
   // Synchronized search & clinical status filter
   const filteredPatients = useMemo(() => {
@@ -310,7 +310,7 @@ const DoctorDashboard = () => {
       const matchesStatus = statusFilter === 'All' || status === statusFilter;
       return matchesSearch && matchesStatus;
     });
-  }, [patients, searchTerm, statusFilter, globalRealtimeData]);
+  }, [patients, searchTerm, statusFilter, globalRealtimeData, getPatientStatusData]);
 
   const realtimeForPatient = (activePatient && globalRealtimeData[activePatient.id]) ? globalRealtimeData[activePatient.id] : [];
   const currentRealtimeData = realtimeForPatient.length > 0 ? realtimeForPatient : history;
@@ -483,7 +483,7 @@ const DoctorDashboard = () => {
 
           {/* Search & Status Filter Control Bar */}
           <div className="glass-panel" style={{ padding: '1.25rem', marginBottom: '1.5rem', display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
-            <div style={{ flex: 1, position: 'relative', minWidth: '240px' }}>
+            <div style={{ flex: 1, position: 'relative', minWidth: '180px' }}>
               <Search size={18} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
               <input
                 type="text"
@@ -571,7 +571,7 @@ const DoctorDashboard = () => {
               <ArrowLeft size={18} /> Back to Directory
             </button>
 
-            <div className="glass-panel" style={{ flex: 1, padding: '1.25rem 1.5rem', display: 'flex', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap', minWidth: '280px' }}>
+            <div className="glass-panel" style={{ flex: 1, padding: '1.25rem 1.5rem', display: 'flex', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap', minWidth: 0 }}>
               <div className="patient-avatar" style={{ width: '56px', height: '56px', fontSize: '1.25rem' }}>
                 {(activePatient.name || 'Patient').trim().split(/\s+/).map(n => n[0] || '').join('').substring(0, 2).toUpperCase() || 'PT'}
               </div>
@@ -970,7 +970,7 @@ const DoctorDashboard = () => {
               Register New Patient Record
             </h2>
 
-            <form onSubmit={handleAddPatientSubmit} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+            <form onSubmit={handleAddPatientSubmit} className="modal-form-grid">
               <div style={{ gridColumn: '1 / -1' }}>
                 <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.4rem', textTransform: 'uppercase' }}>Full Name *</label>
                 <input required type="text" name="name" value={newPatientForm.name} onChange={handleNewPatientChange} className="glass-input" placeholder="e.g. John Doe" />

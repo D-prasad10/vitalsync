@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Activity, ShieldAlert, PhoneCall, Stethoscope, Pencil, Check, X, User, HeartPulse, AlertTriangle, Users } from 'lucide-react';
 import SensorGraph from '../components/SensorGraph';
 import HealthScorePanel from '../components/HealthScorePanel';
@@ -13,6 +13,27 @@ const CaretakerDashboard = () => {
   const [contactEdit, setContactEdit] = useState({ guardian: false, doctor: false });
   const [contactValues, setContactValues] = useState({ guardian_contact: '', doctor_name: '', doctor_phone: '' });
   const [loading, setLoading] = useState(true);
+
+  const selectPatient = useCallback((p) => {
+    setActivePatient(p);
+    setContactValues({
+      guardian_contact: p.guardian_contact || '',
+      doctor_name: p.doctor_name || '',
+      doctor_phone: p.doctor_phone || ''
+    });
+    setContactEdit({ guardian: false, doctor: false });
+
+    fetch(`http://localhost:5001/api/patients/${p.id}/history`)
+      .then(res => res.json())
+      .then(data => {
+        const hist = Array.isArray(data) ? data : [];
+        setHistory(hist);
+        if (hist.length > 0) {
+          seedPatientTelemetry(p.id, hist);
+        }
+      })
+      .catch(() => setHistory([]));
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -38,28 +59,7 @@ const CaretakerDashboard = () => {
       .catch(() => { if (mounted) setLoading(false); });
 
     return () => { mounted = false; };
-  }, []);
-
-  function selectPatient(p) {
-    setActivePatient(p);
-    setContactValues({
-      guardian_contact: p.guardian_contact || '',
-      doctor_name: p.doctor_name || '',
-      doctor_phone: p.doctor_phone || ''
-    });
-    setContactEdit({ guardian: false, doctor: false });
-
-    fetch(`http://localhost:5001/api/patients/${p.id}/history`)
-      .then(res => res.json())
-      .then(data => {
-        const hist = Array.isArray(data) ? data : [];
-        setHistory(hist);
-        if (hist.length > 0) {
-          seedPatientTelemetry(p.id, hist);
-        }
-      })
-      .catch(() => setHistory([]));
-  }
+  }, [selectPatient]);
 
   const saveContact = async (field) => {
     if (!activePatient) return;

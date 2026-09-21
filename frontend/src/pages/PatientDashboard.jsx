@@ -146,10 +146,6 @@ const PatientDashboard = () => {
   const heartRate = latestVitalPoint.hr ?? latestVitalPoint.heart_rate ?? latestVitalPoint.pulse ?? null;
   const spo2 = latestVitalPoint.spo2 ?? null;
   const temp = latestVitalPoint.temp ?? latestVitalPoint.temperature ?? null;
-  const sys = latestVitalPoint.bp_sys ?? latestVitalPoint.bpSys ?? null;
-  const dia = latestVitalPoint.bp_dia ?? latestVitalPoint.bpDia ?? null;
-  const hasBp = (sys !== null && dia !== null);
-  const bp = hasBp ? `${sys}/${dia}` : 'Unavailable (No Sensor)';
 
   // Compute Health Status
   const healthStatus = useMemo(() => {
