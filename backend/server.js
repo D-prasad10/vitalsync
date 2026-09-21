@@ -354,8 +354,111 @@ db.all('SELECT id, device_id FROM patients WHERE device_id IS NOT NULL', [], (er
   }
 });
 
+// ── AI Engine Configuration & Mapping Helpers ───────────────────────────────
+const AI_ENGINE_URL = process.env.AI_ENGINE_URL || 'http://127.0.0.1:5002/analyze';
+
+/**
+ * Maps backend normalized telemetry to the exact AI engine inference schema.
+ * Never uses normalized.temp directly (which is in Fahrenheit).
+ * Uses normalized.bmpTemp ?? normalized.dhtTemp (Celsius).
+ * Does not fabricate missing sensor values.
+ */
+function mapToAiEngineTelemetry(normalized) {
+  if (!normalized || typeof normalized !== 'object') {
+    return null;
+  }
+
+  // 1. Temperature: Use Celsius (bmpTemp ?? dhtTemp). Never use normalized.temp (Fahrenheit).
+  const tempC = normalized.bmpTemp ?? normalized.dhtTemp;
+
+  // 2. Air quality alert: 1 when ALERT (or mq135Digital === 0), otherwise 0
+  let airQualityAlert = 0;
+  if (normalized.mq135 === 'ALERT' || normalized.mq135Digital === 0) {
+    airQualityAlert = 1;
+  }
+
+  return {
+    temperature_c: tempC != null ? Number(tempC) : null,
+    humidity_percent: normalized.humidity != null ? Number(normalized.humidity) : null,
+    pressure_hpa: normalized.pressure != null ? Number(normalized.pressure) : null,
+    ecg_raw: (normalized.ecg_val ?? normalized.ecg?.value) != null ? Number(normalized.ecg_val ?? normalized.ecg?.value) : null,
+    max30100_ir_raw: (normalized.maxIR ?? normalized.max30100?.rawIR) != null ? Number(normalized.maxIR ?? normalized.max30100?.rawIR) : null,
+    max30100_red_raw: (normalized.maxRED ?? normalized.max30100?.rawRED) != null ? Number(normalized.maxRED ?? normalized.max30100?.rawRED) : null,
+    acc_x: (normalized.accelX ?? normalized.imu?.accX) != null ? Number(normalized.accelX ?? normalized.imu?.accX) : null,
+    acc_y: (normalized.accelY ?? normalized.imu?.accY) != null ? Number(normalized.accelY ?? normalized.imu?.accY) : null,
+    acc_z: (normalized.accelZ ?? normalized.imu?.accZ) != null ? Number(normalized.accelZ ?? normalized.imu?.accZ) : null,
+    gyro_x: (normalized.gyroX ?? normalized.imu?.gyroX) != null ? Number(normalized.gyroX ?? normalized.imu?.gyroX) : null,
+    gyro_y: (normalized.gyroY ?? normalized.imu?.gyroY) != null ? Number(normalized.gyroY ?? normalized.imu?.gyroY) : null,
+    gyro_z: (normalized.gyroZ ?? normalized.imu?.gyroZ) != null ? Number(normalized.gyroZ ?? normalized.imu?.gyroZ) : null,
+    air_quality_alert: airQualityAlert
+  };
+}
+
+/**
+ * Asynchronously sends mapped telemetry to the Python AI engine for anomaly & risk inference.
+ * Gracefully handles connection failures, timeouts, and missing fields.
+ */
+async function analyzeWithAiEngine(normalized) {
+  const telemetry = mapToAiEngineTelemetry(normalized);
+  if (!telemetry) {
+    return { status: 'unavailable', reason: 'invalid_telemetry_payload' };
+  }
+
+  const requiredFields = [
+    'temperature_c',
+    'humidity_percent',
+    'pressure_hpa',
+    'ecg_raw',
+    'max30100_ir_raw',
+    'max30100_red_raw',
+    'acc_x',
+    'acc_y',
+    'acc_z',
+    'gyro_x',
+    'gyro_y',
+    'gyro_z',
+    'air_quality_alert'
+  ];
+
+  const hasMissingOrInvalid = requiredFields.some(
+    (field) => telemetry[field] === null || telemetry[field] === undefined || typeof telemetry[field] !== 'number' || !Number.isFinite(telemetry[field])
+  );
+
+  if (hasMissingOrInvalid) {
+    return { status: 'unavailable', reason: 'required_telemetry_missing' };
+  }
+
+  try {
+    const response = await axios.post(AI_ENGINE_URL, telemetry, {
+      timeout: 2000,
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+    if (response.data && typeof response.data === 'object' && typeof response.data.anomaly === 'boolean') {
+      return {
+        anomaly: response.data.anomaly,
+        anomaly_score: response.data.anomaly_score,
+        risk_level: response.data.risk_level,
+        alert: response.data.alert
+      };
+    }
+
+    return { status: 'unavailable', reason: 'invalid_ai_response' };
+  } catch (err) {
+    if (err.code === 'ECONNREFUSED') {
+      console.warn(`[AI-ENGINE] AI service offline at ${AI_ENGINE_URL}`);
+    } else if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
+      console.warn(`[AI-ENGINE] Request to ${AI_ENGINE_URL} timed out`);
+    } else {
+      console.warn(`[AI-ENGINE] AI service error: ${err.message}`);
+    }
+
+    return { status: 'unavailable', reason: 'ai_service_unavailable' };
+  }
+}
+
 // Helper: Normalize incoming hardware telemetry from ESP8266 and broadcast to clients
-function ingestHardwareTelemetry(raw, clientIp = null) {
+async function ingestHardwareTelemetry(raw, clientIp = null) {
   if (!raw || typeof raw !== 'object') {
     throw new Error('Invalid telemetry payload: must be a JSON object');
   }
@@ -583,6 +686,9 @@ function ingestHardwareTelemetry(raw, clientIp = null) {
     healthScore
   };
 
+  // ── AI Engine Integration ──────────────────────────────────────────────────
+  normalizedPayload.ai = await analyzeWithAiEngine(normalizedPayload);
+
   // Instant broadcast via Socket.IO for 500ms smooth real-time dashboard updates
   io.emit('sensor_data', normalizedPayload);
   io.emit('telemetry_update', normalizedPayload);
@@ -594,6 +700,9 @@ function ingestHardwareTelemetry(raw, clientIp = null) {
   }
   if (leadOffPlus || leadOffMinus) {
     alerts.push('⚠️ ECG Leads Disconnected (AD8232 LO+/LO- Active)');
+  }
+  if (normalizedPayload.ai && normalizedPayload.ai.alert) {
+    alerts.push(`⚠️ AI Anomaly Detected (${(normalizedPayload.ai.risk_level || 'warning').toUpperCase()} risk)`);
   }
 
   db.get('SELECT * FROM thresholds WHERE patient_id = ?', [patientId], (tErr, row) => {
@@ -620,10 +729,22 @@ function ingestHardwareTelemetry(raw, clientIp = null) {
     const shouldSaveDb = alerts.length > 0 || (now - (lastDbSavePerPatient.get(patientId) || 0) >= 3000);
     if (shouldSaveDb) {
       lastDbSavePerPatient.set(patientId, now);
+
+      let aiRiskLevel = 'unavailable';
+      let aiAnomalyScore = null;
+      if (normalizedPayload.ai && typeof normalizedPayload.ai === 'object') {
+        if (normalizedPayload.ai.risk_level && typeof normalizedPayload.ai.risk_level === 'string') {
+          aiRiskLevel = normalizedPayload.ai.risk_level;
+        }
+        if (typeof normalizedPayload.ai.anomaly_score === 'number' && Number.isFinite(normalizedPayload.ai.anomaly_score)) {
+          aiAnomalyScore = normalizedPayload.ai.anomaly_score;
+        }
+      }
+
       db.run(
         `INSERT INTO sensor_logs 
-         (patient_id, hr, bp_sys, bp_dia, spo2, temp, health_score, humidity, pressure, ecg_val, mq135, gps_lat, gps_lng, raw_payload, timestamp, dht_temp, bmp_temp, max_ir, max_red, device_ip) 
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (patient_id, hr, bp_sys, bp_dia, spo2, temp, health_score, humidity, pressure, ecg_val, mq135, gps_lat, gps_lng, raw_payload, timestamp, dht_temp, bmp_temp, max_ir, max_red, device_ip, ai_risk_level, ai_anomaly_score) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           patientId,
           heartRate,
@@ -644,7 +765,9 @@ function ingestHardwareTelemetry(raw, clientIp = null) {
           bmpTemp,
           maxIR,
           maxRED,
-          deviceIp
+          deviceIp,
+          aiRiskLevel,
+          aiAnomalyScore
         ],
         (insertErr) => {
           if (insertErr) console.error('[DB] sensor_logs insert error:', insertErr.message);
@@ -657,10 +780,10 @@ function ingestHardwareTelemetry(raw, clientIp = null) {
 }
 
 // ── Ingestion HTTP Endpoints for ESP8266 ───────────────────────────────────────
-app.post(['/api/telemetry', '/api/hardware/telemetry', '/api/telemetry/esp8266'], (req, res) => {
+app.post(['/api/telemetry', '/api/hardware/telemetry', '/api/telemetry/esp8266'], async (req, res) => {
   try {
     const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-    const normalized = ingestHardwareTelemetry(req.body, clientIp ? clientIp.replace('::ffff:', '') : null);
+    const normalized = await ingestHardwareTelemetry(req.body, clientIp ? clientIp.replace('::ffff:', '') : null);
     res.json({
       success: true,
       receivedAt: Date.now(),
@@ -785,7 +908,7 @@ async function pollEsp8266() {
         patientId: activeEspConfig.patientId || 1,
         ip: response.data.ip || clientIp
       };
-      ingestHardwareTelemetry(payload, clientIp);
+      await ingestHardwareTelemetry(payload, clientIp);
     }
   } catch (err) {
     activeEspConfig.lastPollStatus = 'ERROR';
@@ -840,7 +963,7 @@ app.post('/api/hardware/config', async (req, res) => {
 });
 
 // POST /api/hardware/test-pulse — send a test telemetry packet adhering to real hardware schema
-app.post('/api/hardware/test-pulse', (req, res) => {
+app.post('/api/hardware/test-pulse', async (req, res) => {
   const testPayload = {
     ip: activeEspConfig.ip || '192.168.1.105',
     deviceId: 'ESP8266-001',
@@ -866,7 +989,7 @@ app.post('/api/hardware/test-pulse', (req, res) => {
     gpsFix: 1,
     ...req.body
   };
-  const normalized = ingestHardwareTelemetry(testPayload, testPayload.ip);
+  const normalized = await ingestHardwareTelemetry(testPayload, testPayload.ip);
   res.json({ success: true, telemetry: normalized });
 });
 
@@ -875,9 +998,9 @@ io.on('connection', (socket) => {
   console.log('[SOCKET] Client connected:', socket.id);
 
   // Allow hardware or simulators to ingest via Socket.IO
-  socket.on('hardware_telemetry', (data, ack) => {
+  socket.on('hardware_telemetry', async (data, ack) => {
     try {
-      const normalized = ingestHardwareTelemetry(data);
+      const normalized = await ingestHardwareTelemetry(data);
       if (typeof ack === 'function') ack({ success: true });
     } catch (err) {
       if (typeof ack === 'function') ack({ error: err.message });
