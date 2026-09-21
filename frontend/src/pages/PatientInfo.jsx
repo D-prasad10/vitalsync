@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { User, Phone, MapPin, Activity, ShieldAlert, Users, FileText, ExternalLink, ArrowRight } from 'lucide-react';
+import { User, Phone, MapPin, Activity, ShieldAlert, Users, FileText, ArrowRight } from 'lucide-react';
 import PatientCard from '../components/PatientCard';
 import { useRealtimeData, seedPatientTelemetry } from '../utils/telemetryStore';
 

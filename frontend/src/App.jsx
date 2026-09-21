@@ -41,7 +41,6 @@ const ProtectedRoute = ({ user, requiredRole, allowedRoles, children }) => {
     }
   }
 
-  console.log(`[AUTH] ProtectedRoute: Access granted for role "${role}"`);
   return children;
 };
 
@@ -55,13 +54,11 @@ function App() {
       ...userData,
       role: (userData.role || 'staff').toLowerCase().trim()
     };
-    console.log('[AUTH] handleLogin: Storing authenticated user session:', normalizedUser);
     localStorage.setItem('vitals_user', JSON.stringify(normalizedUser));
     setUser(normalizedUser);
   }, []);
 
   const handleLogout = useCallback(() => {
-    console.log('[AUTH] handleLogout: Clearing user session');
     localStorage.removeItem('vitals_user');
     setUser(null);
     setSidebarOpen(false);

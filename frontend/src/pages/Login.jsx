@@ -5,6 +5,7 @@ import {
   Phone, Mail, Shield, CheckCircle, Loader, ArrowLeft,
   User
 } from 'lucide-react';
+import { roleHome } from '../utils/auth';
 
 const API = 'http://localhost:5001';
 
@@ -54,7 +55,6 @@ const Login = ({ onLogin }) => {
   };
 
   const handleSendOtp = async () => {
-    console.log('[AUTH] Send OTP requested. Selected role:', role, 'Mobile:', form.phone, 'Email:', form.email);
     const e = validateCredentials();
     if (Object.keys(e).length) { setErrors(e); return; }
     setErrors({});
@@ -71,7 +71,6 @@ const Login = ({ onLogin }) => {
         })
       });
       const data = await res.json();
-      console.log('[AUTH] Send OTP response received:', data);
       if (!res.ok) {
         setServerError(data.error || 'Failed to send OTP.');
       } else {
@@ -94,7 +93,6 @@ const Login = ({ onLogin }) => {
     if (otp.trim().length !== 6) return;
     setOtpError('');
     setVerifying(true);
-    console.log('[AUTH] Verify OTP started for mobile:', form.phone.trim(), 'OTP:', otp.trim());
     try {
       const res = await fetch(`${API}/api/auth/verify-otp`, {
         method: 'POST',
@@ -102,7 +100,6 @@ const Login = ({ onLogin }) => {
         body: JSON.stringify({ mobile: form.phone.trim(), otp: otp.trim() })
       });
       const data = await res.json();
-      console.log('[AUTH] Verify OTP API response:', data);
       if (!res.ok) {
         setOtpError(data.error || 'Verification failed.');
         setVerifying(false);
@@ -116,29 +113,15 @@ const Login = ({ onLogin }) => {
           id: (data.user && data.user.id) || ''
         };
 
-        // Determine destination route based on role
-        let targetRoute = '/patient-dashboard';
-        if (userRole === 'doctor') {
-          targetRoute = '/doctor';
-        } else if (userRole === 'caretaker') {
-          targetRoute = '/caretaker';
-        } else if (userRole === 'staff') {
-          targetRoute = '/staff';
-        } else if (userRole === 'patient') {
-          targetRoute = '/patient-dashboard';
-        }
-
-        console.log('[AUTH] Detected role:', userRole, '| Target route:', targetRoute, '| User data:', userData);
+        const targetRoute = roleHome(userData);
 
         // Synchronously commit to localStorage FIRST so any route guards immediately see it
         localStorage.setItem('vitals_user', JSON.stringify(userData));
-        console.log('[AUTH] Stored user in localStorage: vitals_user =', localStorage.getItem('vitals_user'));
 
         // Update React state via callback
         onLogin(userData);
 
         // Immediate navigation to dashboard
-        console.log('[AUTH] Navigating immediately to target route:', targetRoute);
         navigate(targetRoute, { replace: true });
       }
     } catch (err) {
