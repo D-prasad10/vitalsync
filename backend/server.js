@@ -355,7 +355,14 @@ db.all('SELECT id, device_id FROM patients WHERE device_id IS NOT NULL', [], (er
 });
 
 // ── AI Engine Configuration & Mapping Helpers ───────────────────────────────
-const AI_ENGINE_URL = process.env.AI_ENGINE_URL || 'http://127.0.0.1:5002/analyze';
+// AI_ENGINE_URL env var accepts either the service base URL (preferred, e.g.
+// http://127.0.0.1:5002) or the legacy full endpoint URL (http://127.0.0.1:5002/analyze).
+// Trailing '/analyze' and trailing slashes are stripped so that the path is
+// always appended exactly once, preventing the double-path bug /analyze/analyze.
+const AI_ENGINE_BASE_URL = (process.env.AI_ENGINE_URL || 'http://127.0.0.1:5002')
+  .replace(/\/analyze\/?$/, '')  // strip legacy trailing /analyze
+  .replace(/\/+$/, '');          // strip any remaining trailing slashes
+const AI_ENGINE_ANALYZE_URL = `${AI_ENGINE_BASE_URL}/analyze`;
 
 /**
  * Maps backend normalized telemetry to the exact AI engine inference schema.
@@ -429,7 +436,7 @@ async function analyzeWithAiEngine(normalized) {
   }
 
   try {
-    const response = await axios.post(AI_ENGINE_URL, telemetry, {
+    const response = await axios.post(AI_ENGINE_ANALYZE_URL, telemetry, {
       timeout: 2000,
       headers: { 'Content-Type': 'application/json' }
     });
@@ -446,9 +453,9 @@ async function analyzeWithAiEngine(normalized) {
     return { status: 'unavailable', reason: 'invalid_ai_response' };
   } catch (err) {
     if (err.code === 'ECONNREFUSED') {
-      console.warn(`[AI-ENGINE] AI service offline at ${AI_ENGINE_URL}`);
+      console.warn(`[AI-ENGINE] AI service offline at ${AI_ENGINE_BASE_URL}`);
     } else if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
-      console.warn(`[AI-ENGINE] Request to ${AI_ENGINE_URL} timed out`);
+      console.warn(`[AI-ENGINE] Request to ${AI_ENGINE_ANALYZE_URL} timed out`);
     } else {
       console.warn(`[AI-ENGINE] AI service error: ${err.message}`);
     }
