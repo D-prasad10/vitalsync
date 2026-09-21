@@ -1,6 +1,11 @@
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 
+let resolveDbReady;
+const readyPromise = new Promise((resolve) => {
+  resolveDbReady = resolve;
+});
+
 const dbPath = path.resolve(__dirname, 'health_monitor.db');
 const db = new sqlite3.Database(dbPath, (err) => {
   if (err) {
@@ -93,6 +98,59 @@ const db = new sqlite3.Database(dbPath, (err) => {
         db.run(`ALTER TABLE sensor_logs ADD COLUMN device_ip TEXT`, () => {});
       });
 
+      // Devices Table (tracks registered hardware units and patient mapping)
+      db.run(`
+        CREATE TABLE IF NOT EXISTS devices (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          device_id TEXT UNIQUE NOT NULL,
+          patient_id INTEGER,
+          ip TEXT,
+          status TEXT DEFAULT 'OFFLINE',
+          last_seen INTEGER,
+          created_at INTEGER,
+          updated_at INTEGER,
+          FOREIGN KEY (patient_id) REFERENCES patients(id)
+        )
+      `, () => {
+        db.run(`ALTER TABLE devices ADD COLUMN status TEXT DEFAULT 'OFFLINE'`, () => {});
+        db.run(`ALTER TABLE devices ADD COLUMN last_seen INTEGER`, () => {});
+        db.run(`ALTER TABLE devices ADD COLUMN ip TEXT`, () => {});
+      });
+
+      // Alerts Table (tracks hardware/environmental safety alerts)
+      db.run(`
+        CREATE TABLE IF NOT EXISTS alerts (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          patient_id INTEGER,
+          device_id TEXT,
+          severity TEXT NOT NULL,
+          type TEXT NOT NULL,
+          message TEXT NOT NULL,
+          acknowledged INTEGER DEFAULT 0,
+          timestamp INTEGER NOT NULL,
+          FOREIGN KEY (patient_id) REFERENCES patients(id)
+        )
+      `, () => {
+        db.run(`ALTER TABLE alerts ADD COLUMN acknowledged INTEGER DEFAULT 0`, () => {});
+        db.run(`ALTER TABLE alerts ADD COLUMN type TEXT`, () => {});
+      });
+
+      // AI Predictions Table (tracks risk evaluations received from AI Engine)
+      db.run(`
+        CREATE TABLE IF NOT EXISTS ai_predictions (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          patient_id INTEGER,
+          device_id TEXT,
+          risk_level TEXT,
+          risk_type TEXT,
+          confidence REAL,
+          model_version TEXT,
+          explanation TEXT,
+          timestamp INTEGER NOT NULL,
+          FOREIGN KEY (patient_id) REFERENCES patients(id)
+        )
+      `);
+
       // Staff Table (doctors and caretakers who can log in)
       db.run(`
         CREATE TABLE IF NOT EXISTS staff (
@@ -120,13 +178,34 @@ const db = new sqlite3.Database(dbPath, (err) => {
           db.run(`INSERT INTO patients (name, age, room_number, gender, mobile, weight, guardian_contact, blood_group) VALUES ('Jane Smith', 62, '204B', 'Female', '+1 555-0200', 142.0, '+1 555-0201', 'A-')`);
           
           db.run(`INSERT INTO thresholds (patient_id) VALUES (1)`);
-          db.run(`INSERT INTO thresholds (patient_id) VALUES (2)`);
-          
-          console.log('Seed data inserted.');
+          db.run(`INSERT INTO thresholds (patient_id) VALUES (2)`, () => {
+            console.log('Seed data inserted.');
+            if (resolveDbReady) resolveDbReady();
+          });
+        } else {
+          if (resolveDbReady) resolveDbReady();
         }
       });
     });
   }
+});
+
+db.readyPromise = readyPromise;
+
+// Async Promise Wrappers for robust query execution across services
+db.getAsync = (sql, params = []) => new Promise((resolve, reject) => {
+  db.get(sql, params, (err, row) => (err ? reject(err) : resolve(row)));
+});
+
+db.allAsync = (sql, params = []) => new Promise((resolve, reject) => {
+  db.all(sql, params, (err, rows) => (err ? reject(err) : resolve(rows)));
+});
+
+db.runAsync = (sql, params = []) => new Promise((resolve, reject) => {
+  db.run(sql, params, function (err) {
+    if (err) return reject(err);
+    resolve({ lastID: this.lastID, changes: this.changes });
+  });
 });
 
 module.exports = db;

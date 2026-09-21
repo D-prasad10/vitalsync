@@ -339,546 +339,60 @@ app.post('/api/patients/:id/thresholds', (req, res) => {
   });
 });
 
-// ── Real Hardware Sensor Telemetry Ingestion ──────────────────────────────────
-// Device Liveness Map: deviceId -> { lastSeen, patientId, ip, status }
-const deviceHeartbeats = new Map();
-const devicePatientMapping = new Map(); // deviceId -> patientId
-const lastDbSavePerPatient = new Map(); // patientId -> lastTimestamp
+// ── Modular Services & Routers ────────────────────────────────────────────────
+const alertService = require('./services/alert.service');
+const aiService = require('./services/ai.service');
+const deviceService = require('./services/device.service');
+const telemetryService = require('./services/telemetry.service');
+const { getLocalLanIp } = require('./utils/network');
+const { errorHandler } = require('./middleware/errorHandler.middleware');
 
-// Load initial patient-to-device mapping from database
-db.all('SELECT id, device_id FROM patients WHERE device_id IS NOT NULL', [], (err, rows) => {
-  if (!err && rows) {
-    rows.forEach(r => {
-      if (r.device_id) devicePatientMapping.set(r.device_id.trim(), r.id);
-    });
-  }
+const telemetryRoutes = require('./routes/telemetry.routes');
+const deviceRoutes = require('./routes/device.routes');
+const alertRoutes = require('./routes/alert.routes');
+const aiRoutes = require('./routes/ai.routes');
+
+// Initialize Services with Socket.IO instance
+alertService.init(io);
+aiService.init(io);
+telemetryService.init(io);
+deviceService.init(io, alertService, (payload, clientIp) => {
+  return telemetryService.processTelemetry(payload, clientIp);
 });
 
-// Helper: Normalize incoming hardware telemetry from ESP8266 and broadcast to clients
-function ingestHardwareTelemetry(raw, clientIp = null) {
-  if (!raw || typeof raw !== 'object') {
-    throw new Error('Invalid telemetry payload: must be a JSON object');
-  }
-
-  const deviceId = String(raw.deviceId || raw.device_id || 'ESP8266-001').trim();
-  const deviceIp = raw.ip || raw.device_ip || clientIp || '192.168.1.1';
-
-  // Determine Patient ID (from payload, or database mapping, or default to 1)
-  let patientId = Number(raw.patientId || raw.patient_id);
-  if (!patientId || isNaN(patientId)) {
-    patientId = devicePatientMapping.get(deviceId) || 1;
-  } else {
-    devicePatientMapping.set(deviceId, patientId);
-  }
-
-  const now = Date.now();
-  const timestamp = Number(raw.timestamp) && Number(raw.timestamp) > 1000000000000 ? Number(raw.timestamp) : now;
-
-  const src = raw.sensors && typeof raw.sensors === 'object' ? { ...raw, ...raw.sensors } : raw;
-
-  // 1. Temperature normalization (DHT11 and BMP280)
-  let dhtTemp = null;
-  let bmpTemp = null;
-  let dhtHumidity = null;
-  let bmpPressure = null;
-
-  // Check flat keys from ESP8266 /data
-  if (src.dhtTemp != null && !isNaN(src.dhtTemp)) dhtTemp = Number(Number(src.dhtTemp).toFixed(2));
-  if (src.bmpTemp != null && !isNaN(src.bmpTemp)) bmpTemp = Number(Number(src.bmpTemp).toFixed(2));
-  if (src.humidity != null && !isNaN(src.humidity)) dhtHumidity = Number(Number(src.humidity).toFixed(2));
-  if (src.pressure != null && !isNaN(src.pressure)) bmpPressure = Number(Number(src.pressure).toFixed(2));
-
-  // Check nested object formats
-  if (src.dht11 && typeof src.dht11 === 'object') {
-    if (dhtTemp == null) dhtTemp = (src.dht11.tempC ?? src.dht11.temperature) != null ? Number(src.dht11.tempC ?? src.dht11.temperature) : null;
-    if (dhtHumidity == null) dhtHumidity = src.dht11.humidity != null ? Number(src.dht11.humidity) : null;
-  }
-  if (src.bmp280 && typeof src.bmp280 === 'object') {
-    if (bmpTemp == null) bmpTemp = (src.bmp280.tempC ?? src.bmp280.temperature) != null ? Number(src.bmp280.tempC ?? src.bmp280.temperature) : null;
-    if (bmpPressure == null) bmpPressure = src.bmp280.pressure != null ? Number(src.bmp280.pressure) : null;
-  }
-
-  // Clinical primary display temperature (BMP280 has higher precision, fallback to DHT11)
-  let primaryTempC = bmpTemp ?? dhtTemp;
-  let tempF = null;
-  if (primaryTempC != null && !isNaN(primaryTempC)) {
-    tempF = primaryTempC < 55 ? Number((primaryTempC * 1.8 + 32).toFixed(1)) : Number(primaryTempC.toFixed(1));
-  }
-
-  const humidity = dhtHumidity;
-  const pressure = bmpPressure;
-
-  // 2. AD8232 ECG (Analog A0 + Leads Off LO+ / LO-)
-  let ecgValue = null;
-  let leadOffPlus = false;
-  let leadOffMinus = false;
-
-  if (src.ecg != null && typeof src.ecg === 'object') {
-    ecgValue = (src.ecg.value ?? src.ecg.ecg) != null ? Number(src.ecg.value ?? src.ecg.ecg) : null;
-    leadOffPlus = Boolean(src.ecg.leadOffPlus ?? src.ecg.loPlus);
-    leadOffMinus = Boolean(src.ecg.leadOffMinus ?? src.ecg.loMinus);
-  } else {
-    if (src.ecg != null && !isNaN(src.ecg)) ecgValue = Number(src.ecg);
-    leadOffPlus = (src.loPlus === 1 || src.loPlus === true || src.leadOffPlus === true);
-    leadOffMinus = (src.loMinus === 1 || src.loMinus === true || src.leadOffMinus === true);
-  }
-
-  // 3. MPU6050 / IMU 6-Axis
-  const imuSrc = src.mpu6050 || src.imu || src;
-  const accel = imuSrc.accel || imuSrc;
-  const gyro = imuSrc.gyro || imuSrc;
-  const imu = {
-    accX: Number(accel.accX ?? accel.x ?? 0),
-    accY: Number(accel.accY ?? accel.y ?? 0),
-    accZ: Number(accel.accZ ?? accel.z ?? 0),
-    gyroX: Number(gyro.gyroX ?? gyro.x ?? 0),
-    gyroY: Number(gyro.gyroY ?? gyro.y ?? 0),
-    gyroZ: Number(gyro.gyroZ ?? gyro.z ?? 0),
-  };
-
-  // 4. MAX30100 Pulse Oximeter: RAW OPTICAL SIGNALS ONLY (IR & RED)
-  // CRITICAL REQUIREMENT: Do NOT invent fake heart rate or SpO2!
-  const maxFound = Boolean(src.maxFound !== false && (src.max30100?.connected !== false));
-  const maxIR = src.maxIR != null ? Number(src.maxIR) : (src.max30100?.rawIR != null ? Number(src.max30100.rawIR) : 0);
-  const maxRED = src.maxRED != null ? Number(src.maxRED) : (src.max30100?.rawRED != null ? Number(src.max30100.rawRED) : 0);
-
-  // Heart Rate & SpO2 are strictly null unless authentic physiological calculation exists
-  const heartRate = null;
-  const spo2 = null;
-
-  // 5. MQ-135 Air Quality (Digital: 0 = LOW/Alert, 1 = HIGH/Normal)
-  let mq135Digital = 1;
-  if (src.mq135 != null) {
-    mq135Digital = typeof src.mq135 === 'object' ? (src.mq135.digital ?? (src.mq135.status === 'ALERT' ? 0 : 1)) : Number(src.mq135);
-  } else if (src.airQuality?.mq135 != null) {
-    mq135Digital = String(src.airQuality.mq135).toUpperCase() === 'ALERT' ? 0 : 1;
-  }
-  const mq135Status = (mq135Digital === 0 || String(src.mq135).toUpperCase() === 'ALERT') ? 'ALERT' : 'NORMAL';
-
-  // 6. NEO-M8N GPS
-  const gpsSat = Number(src.gpsSat ?? src.gps?.satellites ?? 0);
-  const gpsFix = Boolean(src.gpsFix ?? src.gps?.fix ?? (gpsSat >= 4));
-  const gpsLat = src.gpsLat != null ? Number(src.gpsLat) : (src.latitude != null ? Number(src.latitude) : (src.gps?.latitude != null ? Number(src.gps.latitude) : null));
-  const gpsLng = src.gpsLng != null ? Number(src.gpsLng) : (src.longitude != null ? Number(src.longitude) : (src.gps?.longitude != null ? Number(src.gps.longitude) : null));
-
-  const gps = {
-    satellites: gpsSat,
-    latitude: gpsLat,
-    longitude: gpsLng,
-    fix: gpsFix
-  };
-
-  // 7. Blood Pressure: Hardware has NO BP sensor. Explicitly null. NEVER fabricated.
-  const bpSys = null;
-  const bpDia = null;
-
-  // Calculate Health Score based on genuine available hardware telemetry
-  let totalWeights = 0;
-  let earnedScore = 0;
-
-  if (tempF != null) {
-    totalWeights += 40;
-    if (tempF >= 97 && tempF <= 99) earnedScore += 40;
-    else if (tempF >= 96 && tempF <= 100.4) earnedScore += 25;
-  }
-
-  totalWeights += 35;
-  if (mq135Status === 'NORMAL') earnedScore += 35;
-
-  totalWeights += 25;
-  if (!leadOffPlus && !leadOffMinus) earnedScore += 25;
-
-  const healthScore = totalWeights > 0 ? Math.round((earnedScore / totalWeights) * 100) : 100;
-
-  // Track device heartbeat with IP and liveness
-  deviceHeartbeats.set(deviceId, {
-    lastSeen: now,
-    patientId,
-    ip: deviceIp,
-    status: 'ONLINE'
-  });
-
-  // Construct comprehensive normalized telemetry payload
-  const normalizedPayload = {
-    deviceId,
-    patient_id: patientId,
-    patientId,
-    timestamp,
-    deviceStatus: 'ONLINE',
-    deviceIp,
-    ip: deviceIp,
-
-    // Temperatures
-    dhtTemp,
-    bmpTemp,
-    temp: tempF,
-    temperature: {
-      dht11: dhtTemp,
-      bmp280: bmpTemp,
-      displayF: tempF
-    },
-
-    // Environmental
-    humidity,
-    pressure,
-
-    // AD8232 ECG
-    ecg: {
-      value: ecgValue,
-      leadOffPlus,
-      leadOffMinus,
-      leadsConnected: !leadOffPlus && !leadOffMinus
-    },
-    ecg_val: ecgValue,
-    leadOffPlus,
-    leadOffMinus,
-    loPlus: leadOffPlus ? 1 : 0,
-    loMinus: leadOffMinus ? 1 : 0,
-
-    // MAX30100 Optical Raw
-    maxFound,
-    maxIR,
-    maxRED,
-    max30100: {
-      connected: maxFound,
-      rawIR: maxIR,
-      rawRED: maxRED,
-      heartRate: null,
-      spo2: null,
-      statusText: maxFound ? 'Optical Sensor Online' : 'Sensor Not Detected'
-    },
-
-    // Medical Clinical Vitals
-    hr: null,
-    heartRate: null,
-    spo2: null,
-    bpSys: null,
-    bpDia: null,
-    bp: null,
-
-    // Air Quality MQ-135
-    mq135: mq135Status,
-    mq135Digital,
-    airQuality: {
-      mq135: mq135Status,
-      digital: mq135Digital
-    },
-
-    // 6-Axis IMU
-    imu,
-    accelX: imu.accX,
-    accelY: imu.accY,
-    accelZ: imu.accZ,
-    gyroX: imu.gyroX,
-    gyroY: imu.gyroY,
-    gyroZ: imu.gyroZ,
-
-    // GPS
-    gps,
-    gpsSat,
-    gpsFix,
-    gps_lat: gpsLat,
-    gps_lng: gpsLng,
-
-    healthScore
-  };
-
-  // Instant broadcast via Socket.IO for 500ms smooth real-time dashboard updates
-  io.emit('sensor_data', normalizedPayload);
-  io.emit('telemetry_update', normalizedPayload);
-
-  // Evaluate clinical & hardware safety alerts
-  const alerts = [];
-  if (mq135Status === 'ALERT') {
-    alerts.push('⚠️ Hazardous Gas / Smoke Threshold Exceeded (MQ-135)');
-  }
-  if (leadOffPlus || leadOffMinus) {
-    alerts.push('⚠️ ECG Leads Disconnected (AD8232 LO+/LO- Active)');
-  }
-
-  db.get('SELECT * FROM thresholds WHERE patient_id = ?', [patientId], (tErr, row) => {
-    if (row && tempF != null && row.temp_max != null && tempF > row.temp_max) {
-      alerts.push(`High Temperature: ${tempF} °F (Threshold: ${row.temp_max} °F)`);
-    }
-
-    if (alerts.length > 0) {
-      db.get('SELECT name FROM patients WHERE id = ?', [patientId], (_pErr, pRow) => {
-        const patientName = pRow ? pRow.name : `Patient ${patientId}`;
-        console.warn(`[ALERT] Patient ${patientId} (${patientName}):`, alerts);
-        io.emit('emergency_alert', {
-          id: Date.now() + Math.random(),
-          patient_id: patientId,
-          patient_name: patientName,
-          alerts,
-          timestamp,
-          severity: mq135Status === 'ALERT' ? 'critical' : 'warning'
-        });
-      });
-    }
-
-    // Persist to database with throttling (max once every 3 seconds per patient, or immediately if alert occurs)
-    const shouldSaveDb = alerts.length > 0 || (now - (lastDbSavePerPatient.get(patientId) || 0) >= 3000);
-    if (shouldSaveDb) {
-      lastDbSavePerPatient.set(patientId, now);
-      db.run(
-        `INSERT INTO sensor_logs 
-         (patient_id, hr, bp_sys, bp_dia, spo2, temp, health_score, humidity, pressure, ecg_val, mq135, gps_lat, gps_lng, raw_payload, timestamp, dht_temp, bmp_temp, max_ir, max_red, device_ip) 
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          patientId,
-          heartRate,
-          bpSys,
-          bpDia,
-          spo2,
-          tempF,
-          healthScore,
-          humidity,
-          pressure,
-          ecgValue,
-          mq135Status,
-          gpsLat,
-          gpsLng,
-          JSON.stringify(normalizedPayload),
-          timestamp,
-          dhtTemp,
-          bmpTemp,
-          maxIR,
-          maxRED,
-          deviceIp
-        ],
-        (insertErr) => {
-          if (insertErr) console.error('[DB] sensor_logs insert error:', insertErr.message);
-        }
-      );
-    }
-  });
-
-  return normalizedPayload;
-}
-
-// ── Ingestion HTTP Endpoints for ESP8266 ───────────────────────────────────────
-app.post(['/api/telemetry', '/api/hardware/telemetry', '/api/telemetry/esp8266'], (req, res) => {
-  try {
-    const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-    const normalized = ingestHardwareTelemetry(req.body, clientIp ? clientIp.replace('::ffff:', '') : null);
-    res.json({
-      success: true,
-      receivedAt: Date.now(),
-      deviceId: normalized.deviceId,
-      patientId: normalized.patientId,
-      status: 'ONLINE'
-    });
-  } catch (err) {
-    console.error('[INGEST] Hardware telemetry ingestion rejected:', err.message);
-    res.status(400).json({ error: err.message });
-  }
-});
-
-// GET /api/devices — list all registered/active hardware units with patient mapping
-app.get('/api/devices', (req, res) => {
-  const now = Date.now();
-  const devices = [];
-  deviceHeartbeats.forEach((val, devId) => {
-    const isOnline = now - val.lastSeen <= 10000;
-    devices.push({
-      deviceId: devId,
-      patientId: val.patientId,
-      ip: val.ip,
-      status: isOnline ? 'ONLINE' : 'OFFLINE',
-      lastSeen: val.lastSeen,
-      secondsAgo: Math.round((now - val.lastSeen) / 1000)
-    });
-  });
-  res.json(devices);
-});
-
-// POST /api/devices/assign — associate ESP8266 deviceId with a patientId
-app.post('/api/devices/assign', (req, res) => {
-  const { deviceId, patientId } = req.body;
-  if (!deviceId || !patientId) {
-    return res.status(400).json({ error: 'deviceId and patientId are required.' });
-  }
-  const pid = Number(patientId);
-  const did = String(deviceId).trim();
-  devicePatientMapping.set(did, pid);
-
-  db.run('UPDATE patients SET device_id = ? WHERE id = ?', [did, pid], (err) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json({ success: true, deviceId: did, patientId: pid });
-  });
-});
-
-// GET /api/device/status — check liveness of connected hardware
-app.get('/api/device/status', (req, res) => {
-  const now = Date.now();
-  const devices = [];
-  deviceHeartbeats.forEach((val, devId) => {
-    const isOnline = now - val.lastSeen <= 10000;
-    devices.push({
-      deviceId: devId,
-      patientId: val.patientId,
-      ip: val.ip,
-      status: isOnline ? 'ONLINE' : 'OFFLINE',
-      lastSeen: val.lastSeen,
-      secondsAgo: Math.round((now - val.lastSeen) / 1000)
-    });
-  });
-  const primary = devices[0] || null;
-  res.json({
-    online: primary ? primary.status === 'ONLINE' : false,
-    deviceId: primary ? primary.deviceId : (activeEspConfig.ip ? 'ESP8266-001' : null),
-    ip: primary ? primary.ip : activeEspConfig.ip || null,
-    lastSeen: primary ? primary.lastSeen : activeEspConfig.lastPollTime,
-    secondsAgo: primary ? primary.secondsAgo : (activeEspConfig.lastPollTime ? Math.round((now - activeEspConfig.lastPollTime)/1000) : null),
-    devices
-  });
-});
-
-// Helper: detect local LAN IPv4 address for ESP8266 local network connection
-function getLocalLanIp() {
-  const ifaces = os.networkInterfaces();
-  for (const dev in ifaces) {
-    for (const details of ifaces[dev]) {
-      if (details.family === 'IPv4' && !details.internal) {
-        return details.address;
-      }
-    }
-  }
-  return 'localhost';
-}
-
-// ── Background ESP8266 Poller Service ──────────────────────────────────────────
-let activeEspConfig = {
-  ip: process.env.ESP8266_IP || '',
-  patientId: 1,
-  pollingIntervalMs: 1500,
-  isPolling: true,
-  lastPollStatus: 'IDLE',
-  lastPollError: null,
-  lastPollTime: null
-};
-
-let pollIntervalTimer = null;
-
-async function pollEsp8266() {
-  if (!activeEspConfig.ip || !activeEspConfig.isPolling) return;
-
-  let baseIp = activeEspConfig.ip.trim();
-  if (!baseIp.startsWith('http://') && !baseIp.startsWith('https://')) {
-    baseIp = 'http://' + baseIp;
-  }
-  let targetUrl = baseIp;
-  if (!targetUrl.endsWith('/data')) {
-    targetUrl = targetUrl.replace(/\/+$/, '') + '/data';
-  }
-
-  try {
-    const response = await axios.get(targetUrl, { timeout: 2500 });
-    if (response.data && typeof response.data === 'object') {
-      activeEspConfig.lastPollStatus = 'SUCCESS';
-      activeEspConfig.lastPollError = null;
-      activeEspConfig.lastPollTime = Date.now();
-
-      const clientIp = activeEspConfig.ip.replace(/^https?:\/\//, '').split(':')[0].split('/')[0];
-      const payload = {
-        ...response.data,
-        patientId: activeEspConfig.patientId || 1,
-        ip: response.data.ip || clientIp
-      };
-      ingestHardwareTelemetry(payload, clientIp);
-    }
-  } catch (err) {
-    activeEspConfig.lastPollStatus = 'ERROR';
-    activeEspConfig.lastPollError = err.message;
-    activeEspConfig.lastPollTime = Date.now();
-  }
-}
-
-function startEspPoller() {
-  if (pollIntervalTimer) clearInterval(pollIntervalTimer);
-  if (activeEspConfig.ip && activeEspConfig.isPolling) {
-    console.log(`[POLLER] Started polling ESP8266 at ${activeEspConfig.ip} every ${activeEspConfig.pollingIntervalMs}ms`);
-    pollEsp8266();
-    pollIntervalTimer = setInterval(pollEsp8266, activeEspConfig.pollingIntervalMs);
-  }
-}
-
-// GET /api/hardware/config — retrieve active ESP8266 polling and ingestion configuration
-app.get('/api/hardware/config', (req, res) => {
-  const lanIp = getLocalLanIp();
-  res.json({
-    ...activeEspConfig,
-    localLanIp: lanIp,
-    lanIngestionUrl: `http://${lanIp}:${PORT}/api/telemetry/esp8266`,
-    localIngestionUrl: `http://localhost:${PORT}/api/telemetry/esp8266`
-  });
-});
-
-// POST /api/hardware/config — dynamically configure ESP8266 IP address and options
-app.post('/api/hardware/config', async (req, res) => {
-  const { ip, patientId, pollingIntervalMs, isPolling } = req.body;
-  if (ip !== undefined) activeEspConfig.ip = String(ip).trim();
-  if (patientId !== undefined) activeEspConfig.patientId = Number(patientId) || 1;
-  if (pollingIntervalMs !== undefined) activeEspConfig.pollingIntervalMs = Math.max(500, Number(pollingIntervalMs) || 1500);
-  if (isPolling !== undefined) activeEspConfig.isPolling = Boolean(isPolling);
-
-  startEspPoller();
-  
-  if (activeEspConfig.ip) {
-    await pollEsp8266();
-  }
-
-  const lanIp = getLocalLanIp();
-  res.json({
-    success: true,
-    config: {
-      ...activeEspConfig,
-      localLanIp: lanIp,
-      lanIngestionUrl: `http://${lanIp}:${PORT}/api/telemetry/esp8266`
-    }
-  });
-});
-
-// POST /api/hardware/test-pulse — send a test telemetry packet adhering to real hardware schema
-app.post('/api/hardware/test-pulse', (req, res) => {
-  const testPayload = {
-    ip: activeEspConfig.ip || '192.168.1.105',
-    deviceId: 'ESP8266-001',
-    patientId: activeEspConfig.patientId || 1,
-    dhtTemp: 28.5,
-    humidity: 62.0,
-    bmpTemp: 28.3,
-    pressure: 1008.4,
-    ecg: 512,
-    loPlus: 0,
-    loMinus: 0,
-    mq135: 1,
-    accX: 120,
-    accY: -30,
-    accZ: 16320,
-    gyroX: 5,
-    gyroY: -2,
-    gyroZ: 1,
-    maxFound: 1,
-    maxIR: 18432,
-    maxRED: 15200,
-    gpsSat: 8,
-    gpsFix: 1,
-    ...req.body
-  };
-  const normalized = ingestHardwareTelemetry(testPayload, testPayload.ip);
-  res.json({ success: true, telemetry: normalized });
-});
+// Mount modular routes
+app.set('port', PORT);
+app.use(telemetryRoutes);
+app.use(deviceRoutes);
+app.use(alertRoutes);
+app.use(aiRoutes);
 
 // Socket.IO Connection & Hardware Ingestion
 io.on('connection', (socket) => {
   console.log('[SOCKET] Client connected:', socket.id);
 
+  // Allow clients (e.g. patient details page) to subscribe to patient-specific room
+  socket.on('join_patient', (patientId) => {
+    if (patientId) {
+      const room = `patient:${patientId}`;
+      socket.join(room);
+      console.log(`[SOCKET] ${socket.id} joined room ${room}`);
+    }
+  });
+
+  socket.on('leave_patient', (patientId) => {
+    if (patientId) {
+      const room = `patient:${patientId}`;
+      socket.leave(room);
+      console.log(`[SOCKET] ${socket.id} left room ${room}`);
+    }
+  });
+
   // Allow hardware or simulators to ingest via Socket.IO
-  socket.on('hardware_telemetry', (data, ack) => {
+  socket.on('hardware_telemetry', async (data, ack) => {
     try {
-      const normalized = ingestHardwareTelemetry(data);
-      if (typeof ack === 'function') ack({ success: true });
+      const normalized = await telemetryService.processTelemetry(data);
+      if (typeof ack === 'function') ack({ success: true, telemetry: normalized });
     } catch (err) {
       if (typeof ack === 'function') ack({ error: err.message });
     }
@@ -889,49 +403,20 @@ io.on('connection', (socket) => {
   });
 });
 
-// Background 2-second monitor for hardware device timeout (> 10s silent)
-setInterval(() => {
-  const now = Date.now();
-  deviceHeartbeats.forEach((val, devId) => {
-    if (now - val.lastSeen > 10000 && val.reportedOnline !== false) {
-      val.reportedOnline = false;
-      console.warn(`[WATCHDOG] Hardware Device ${devId} went OFFLINE (>10s silent)`);
-      
-      io.emit('emergency_alert', {
-        id: `device-offline-${devId}-${now}`,
-        patient_id: val.patientId,
-        patientId: val.patientId,
-        patient_name: 'Paired Patient',
-        metric: 'Hardware Connectivity',
-        value: 'OFFLINE',
-        message: `Hardware Sensor Unit (${devId}) Disconnected / Offline (>10s)`,
-        alerts: [`⚠️ Hardware Sensor Unit (${devId}) Disconnected / Offline (>10s)`],
-        severity: 'warning',
-        timestamp: now
-      });
-      io.emit('sensor_data', {
-        deviceId: devId,
-        patient_id: val.patientId,
-        patientId: val.patientId,
-        deviceStatus: 'OFFLINE',
-        timestamp: now
-      });
-      io.emit('device_status', {
-        deviceId: devId,
-        patientId: val.patientId,
-        status: 'OFFLINE',
-        lastSeen: val.lastSeen
-      });
-    }
-  });
-}, 2000);
+// Centralized Error Handling Middleware
+app.use(errorHandler);
 
-server.listen(PORT, () => {
-  const lanIp = getLocalLanIp();
-  console.log(`====================================================`);
-  console.log(` SWASTHYAEDGE Backend Server running on port ${PORT}`);
-  console.log(` Local Ingestion URL:     http://localhost:${PORT}/api/telemetry/esp8266`);
-  console.log(` Wi-Fi LAN Ingestion URL: http://${lanIp}:${PORT}/api/telemetry/esp8266`);
-  console.log(`====================================================`);
-  startEspPoller();
-});
+// Start Server if executed directly
+if (require.main === module) {
+  server.listen(PORT, () => {
+    const lanIp = getLocalLanIp();
+    console.log(`====================================================`);
+    console.log(` SWASTHYAEDGE Backend Server running on port ${PORT}`);
+    console.log(` Local Ingestion URL:     http://localhost:${PORT}/api/telemetry/esp8266`);
+    console.log(` Wi-Fi LAN Ingestion URL: http://${lanIp}:${PORT}/api/telemetry/esp8266`);
+    console.log(`====================================================`);
+  });
+}
+
+module.exports = { app, server, io, deviceService, telemetryService, alertService, aiService };
+
