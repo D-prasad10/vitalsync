@@ -1,17 +1,20 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { User, Phone, MapPin, Activity, ShieldAlert, Users } from 'lucide-react';
+import { User, Phone, MapPin, Activity, ShieldAlert, Users, FileText, ExternalLink, ArrowRight } from 'lucide-react';
+import PatientCard from '../components/PatientCard';
+import { useRealtimeData, seedPatientTelemetry } from '../utils/telemetryStore';
 
 const DetailRow = ({ label, value }) => (
-  <div className="glass-panel" style={{ padding: '1rem', background: 'rgba(0,0,0,0.1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-    <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>{label}</span>
-    <span style={{ fontWeight: 600 }}>{value || '—'}</span>
+  <div className="glass-panel" style={{ padding: '0.9rem 1.1rem', background: 'rgba(0,0,0,0.15)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+    <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{label}</span>
+    <span style={{ fontWeight: 600, fontSize: '0.95rem' }}>{value || '—'}</span>
   </div>
 );
 
 const PatientInfo = () => {
   const { id: urlId } = useParams();
   const navigate = useNavigate();
+  const globalRealtimeData = useRealtimeData();
   const [patients, setPatients] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -23,6 +26,16 @@ const PatientInfo = () => {
         if (!mounted) return;
         const list = Array.isArray(data) ? data : [];
         setPatients(list);
+        list.forEach(p => {
+          fetch(`http://localhost:5001/api/patients/${p.id}/history`)
+            .then(r => r.json())
+            .then(hist => {
+              if (Array.isArray(hist) && hist.length > 0) {
+                seedPatientTelemetry(p.id, hist);
+              }
+            })
+            .catch(() => {});
+        });
         setLoading(false);
       })
       .catch(err => {
@@ -47,55 +60,91 @@ const PatientInfo = () => {
     }
   };
 
+  const getPatientStatus = (patientId) => {
+    const data = globalRealtimeData[patientId];
+    if (!data || data.length === 0) return 'Stable';
+    const latest = data[data.length - 1];
+    const score = latest.healthScore ?? latest.health_score ?? 100;
+    const hr = latest.hr ?? latest.heart_rate;
+    const spo2 = latest.spo2;
+    const temp = latest.temp ?? latest.temperature;
+
+    if (score < 50 || (spo2 && spo2 < 90) || (hr && (hr > 120 || hr < 40)) || (temp && temp > 103)) return 'Critical';
+    if (score < 80 || (spo2 && spo2 < 95) || (hr && (hr > 100 || hr < 50)) || (temp && temp > 100.4)) return 'Warning';
+    return 'Stable';
+  };
+
+  const initials = selectedPatient?.name
+    ? selectedPatient.name.trim().split(/\s+/).map(n => n[0] || '').join('').substring(0, 2).toUpperCase()
+    : 'PT';
+
   if (loading) {
-    return <div style={{ textAlign: 'center', padding: '4rem', color: 'var(--text-secondary)' }}>Loading patients...</div>;
+    return (
+      <div className="empty-state" style={{ padding: '6rem 2rem' }}>
+        <div className="loading-spinner" />
+        <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Loading patient directory...</span>
+      </div>
+    );
   }
 
   return (
     <div className="fade-in">
-      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem' }}>
-        <Users size={28} style={{ color: 'var(--accent-primary)' }} />
-        <h1 className="glass-header" style={{ marginBottom: 0 }}>Patient Information</h1>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <div style={{ width: '42px', height: '42px', borderRadius: '12px', background: 'rgba(0,210,255,0.1)', border: '1px solid rgba(0,210,255,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Users size={24} style={{ color: 'var(--accent-primary)' }} />
+          </div>
+          <div>
+            <h1 className="glass-header" style={{ marginBottom: '0.2rem', fontSize: '1.6rem' }}>Patient Information & Dossier</h1>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', margin: 0 }}>
+              Comprehensive clinical profile, demographic data, and emergency routing
+            </p>
+          </div>
+        </div>
+
+        {selectedPatient && (
+          <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <button
+              className="btn-secondary"
+              onClick={() => navigate('/reports')}
+              style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem' }}
+            >
+              <FileText size={15} /> Clinical Reports
+            </button>
+            <button
+              className="btn-primary"
+              onClick={() => navigate('/patient-dashboard')}
+              style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem' }}
+            >
+              <Activity size={15} /> Live Telemetry <ArrowRight size={14} />
+            </button>
+          </div>
+        )}
       </div>
 
-      <div className="dashboard-grid-layout" style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: '2rem', alignItems: 'start' }}>
+      <div className="dashboard-grid-layout" style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: '1.5rem', alignItems: 'start' }}>
 
         {/* Patient List Sidebar */}
-        <div className="glass-panel" style={{ padding: '1rem' }}>
+        <div className="glass-panel" style={{ padding: '1.25rem' }}>
           <h2 style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '1rem', paddingBottom: '0.5rem', borderBottom: '1px solid var(--glass-border)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            All Patients ({patients.length})
+            Patients ({patients.length})
           </h2>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
             {patients.map(p => (
-              <button
+              <PatientCard
                 key={p.id}
+                patient={p}
+                status={getPatientStatus(p.id)}
+                isSelected={selectedPatient?.id === p.id}
                 onClick={() => handleSelectPatient(p)}
-                style={{
-                  padding: '0.875rem 1rem',
-                  borderRadius: '10px',
-                  border: '1px solid',
-                  borderColor: selectedPatient?.id === p.id ? 'var(--accent-primary)' : 'var(--glass-border)',
-                  background: selectedPatient?.id === p.id ? 'rgba(0,210,255,0.1)' : 'transparent',
-                  color: 'var(--text-primary)',
-                  textAlign: 'left',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.75rem'
-                }}
-              >
-                <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: selectedPatient?.id === p.id ? 'rgba(0,210,255,0.2)' : 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <User size={18} style={{ color: selectedPatient?.id === p.id ? 'var(--accent-primary)' : 'var(--text-secondary)' }} />
-                </div>
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: '0.9rem', color: selectedPatient?.id === p.id ? 'var(--accent-primary)' : 'var(--text-primary)' }}>{p.name}</div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '2px' }}>Room {p.room_number} · Age {p.age}</div>
-                </div>
-              </button>
+                variant="compact"
+              />
             ))}
             {patients.length === 0 && (
-              <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', textAlign: 'center', padding: '1rem 0' }}>No patients found.</p>
+              <div className="empty-state" style={{ padding: '2rem 1rem' }}>
+                <User size={28} />
+                <span style={{ fontSize: '0.85rem' }}>No patients found</span>
+              </div>
             )}
           </div>
         </div>
@@ -103,26 +152,37 @@ const PatientInfo = () => {
         {/* Patient Detail Panel */}
         {selectedPatient ? (
           <div className="glass-panel" style={{ padding: '2rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', marginBottom: '2rem', paddingBottom: '1.5rem', borderBottom: '1px solid var(--glass-border)' }}>
-              <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: 'linear-gradient(135deg, var(--accent-secondary), var(--accent-primary))', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', flexShrink: 0 }}>
-                <User size={40} />
-              </div>
-              <div>
-                <h2 style={{ fontSize: '1.75rem', fontWeight: 700, margin: 0 }}>{selectedPatient.name}</h2>
-                <div style={{ color: 'var(--text-secondary)', marginTop: '0.4rem', display: 'flex', gap: '1rem', fontSize: '0.95rem', flexWrap: 'wrap', alignItems: 'center' }}>
-                  <span>ID: <strong style={{ color: 'var(--text-primary)' }}>{selectedPatient.id}</strong></span>
-                  <span>•</span>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}><MapPin size={14} /> Room {selectedPatient.room_number}</span>
-                  <span>•</span>
-                  <span>Blood: <strong style={{ color: '#ff4d4f' }}>{selectedPatient.blood_group || 'N/A'}</strong></span>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2rem', paddingBottom: '1.5rem', borderBottom: '1px solid var(--glass-border)', flexWrap: 'wrap', gap: '1.25rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
+                <div style={{ width: '72px', height: '72px', borderRadius: '50%', background: 'linear-gradient(135deg, var(--accent-secondary), var(--accent-primary))', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', flexShrink: 0, fontWeight: 700, fontSize: '1.4rem' }}>
+                  {initials}
+                </div>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                    <h2 style={{ fontSize: '1.6rem', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>{selectedPatient.name}</h2>
+                    <span className={`badge ${getPatientStatus(selectedPatient.id) === 'Critical' ? 'badge-critical' : getPatientStatus(selectedPatient.id) === 'Warning' ? 'badge-warning' : 'badge-stable'}`}>
+                      {getPatientStatus(selectedPatient.id)}
+                    </span>
+                  </div>
+                  <div style={{ color: 'var(--text-secondary)', marginTop: '0.35rem', display: 'flex', gap: '0.85rem', fontSize: '0.875rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                    <span>ID: <code style={{ color: 'var(--accent-primary)' }}>PT-00{selectedPatient.id}</code></span>
+                    <span>•</span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}><MapPin size={13} /> Room {selectedPatient.room_number || 'N/A'}</span>
+                    <span>•</span>
+                    <span>Blood: <strong style={{ color: '#ff4d4f' }}>{selectedPatient.blood_group || 'N/A'}</strong></span>
+                  </div>
                 </div>
               </div>
+
+              <span className="badge badge-info" style={{ padding: '0.4rem 0.85rem' }}>
+                Electronic Health Record
+              </span>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '2rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.75rem' }}>
               <div>
                 <h3 style={{ fontSize: '0.85rem', fontWeight: 600, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--accent-primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                  <Activity size={16} /> Demographics
+                  <Activity size={16} /> Demographics & Physical
                 </h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                   <DetailRow label="Full Name" value={selectedPatient.name} />
@@ -135,22 +195,24 @@ const PatientInfo = () => {
 
               <div>
                 <h3 style={{ fontSize: '0.85rem', fontWeight: 600, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--success)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                  <ShieldAlert size={16} /> Contact & Room
+                  <ShieldAlert size={16} /> Contact & Primary Care
                 </h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                   <DetailRow label="Room Number" value={selectedPatient.room_number} />
                   <DetailRow
                     label="Mobile"
                     value={selectedPatient.mobile
-                      ? <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}><Phone size={14} /> {selectedPatient.mobile}</span>
+                      ? <a href={`tel:${selectedPatient.mobile}`} style={{ color: 'var(--text-primary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem' }}><Phone size={14} color="var(--accent-primary)" /> {selectedPatient.mobile}</a>
                       : null}
                   />
                   <DetailRow
                     label="Guardian Contact"
                     value={selectedPatient.guardian_contact
-                      ? <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}><Phone size={14} /> {selectedPatient.guardian_contact}</span>
+                      ? <a href={`tel:${selectedPatient.guardian_contact}`} style={{ color: 'var(--text-primary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem' }}><Phone size={14} color="var(--success)" /> {selectedPatient.guardian_contact}</a>
                       : null}
                   />
+                  <DetailRow label="Attending Doctor" value={selectedPatient.doctor_name} />
+                  <DetailRow label="Doctor Phone" value={selectedPatient.doctor_phone} />
                 </div>
               </div>
             </div>

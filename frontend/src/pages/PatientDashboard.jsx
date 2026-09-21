@@ -211,12 +211,14 @@ const PatientDashboard = () => {
           {/* Roster Cards */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', maxHeight: '780px', overflowY: 'auto', paddingRight: '0.25rem' }}>
             {fetchingPatients ? (
-              <div className="glass-panel" style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
-                Loading patients...
+              <div className="glass-panel" style={{ padding: '2.5rem 1rem', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem', color: 'var(--text-secondary)' }}>
+                <div className="loading-spinner" />
+                <span style={{ fontSize: '0.85rem' }}>Loading patient roster...</span>
               </div>
             ) : filteredPatients.length === 0 ? (
-              <div className="glass-panel" style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
-                No matching patients found.
+              <div className="glass-panel" style={{ padding: '2.5rem 1rem', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem', color: 'var(--text-secondary)' }}>
+                <Users size={32} style={{ opacity: 0.5, color: 'var(--text-muted)' }} />
+                <span style={{ fontSize: '0.85rem' }}>No matching patients found.</span>
               </div>
             ) : (
               filteredPatients.map(p => (
@@ -237,69 +239,70 @@ const PatientDashboard = () => {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
 
             {/* 1. Header Profile & Health Status Banner */}
-            <div className="glass-panel" style={{ padding: '1.75rem', position: 'relative' }}>
-              
-              {/* Header Action Buttons */}
-              <div style={{ position: 'absolute', top: '1.25rem', right: '1.25rem', display: 'flex', gap: '0.5rem' }}>
-                {!isEditing ? (
-                  <button className="btn-secondary" onClick={() => setIsEditing(true)} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.45rem 0.9rem', fontSize: '0.85rem', minHeight: '36px' }}>
-                    <Edit2 size={14} /> Edit Profile
-                  </button>
-                ) : (
-                  <>
-                    <button onClick={() => { setEditFormData(activePatient); setIsEditing(false); }} style={{ background: 'transparent', border: '1px solid var(--glass-border)', color: 'var(--text-secondary)', padding: '0.45rem 0.9rem', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem' }}>
-                      <X size={14} /> Cancel
-                    </button>
-                    <button className="btn-primary" onClick={handleSaveProfile} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.45rem 0.9rem', fontSize: '0.85rem', minHeight: '36px' }}>
-                      <Save size={14} /> Save Changes
-                    </button>
-                  </>
-                )}
-              </div>
-
-              {/* Profile Main Info */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap' }}>
-                <div style={{ position: 'relative', flexShrink: 0 }}>
-                  <div style={{
-                    width: '84px', height: '84px', borderRadius: '50%',
-                    background: 'linear-gradient(135deg, var(--accent-secondary), var(--accent-primary))',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff',
-                    overflow: 'hidden', border: '3px solid rgba(255,255,255,0.15)',
-                    backgroundImage: (isEditing ? editFormData.photo : activePatient.photo) ? `url(${isEditing ? editFormData.photo : activePatient.photo})` : 'none',
-                    backgroundSize: 'cover', backgroundPosition: 'center',
-                    boxShadow: 'var(--shadow-md)'
-                  }}>
-                    {!(isEditing ? editFormData.photo : activePatient.photo) && <User size={40} />}
+            <div className="glass-panel" style={{ padding: '1.5rem 1.75rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1.25rem' }}>
+                {/* Profile Main Info */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap', flex: 1, minWidth: '260px' }}>
+                  <div style={{ position: 'relative', flexShrink: 0 }}>
+                    <div style={{
+                      width: '84px', height: '84px', borderRadius: '50%',
+                      background: 'linear-gradient(135deg, var(--accent-secondary), var(--accent-primary))',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff',
+                      overflow: 'hidden', border: '3px solid rgba(255,255,255,0.15)',
+                      backgroundImage: (isEditing ? editFormData.photo : activePatient.photo) ? `url(${isEditing ? editFormData.photo : activePatient.photo})` : 'none',
+                      backgroundSize: 'cover', backgroundPosition: 'center',
+                      boxShadow: 'var(--shadow-md)'
+                    }}>
+                      {!(isEditing ? editFormData.photo : activePatient.photo) && <User size={40} />}
+                    </div>
+                    {isEditing && (
+                      <button onClick={() => fileInputRef.current.click()} style={{ position: 'absolute', bottom: 0, right: 0, background: 'var(--bg-panel-solid)', border: '1px solid var(--accent-primary)', borderRadius: '50%', width: '30px', height: '30px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--accent-primary)' }}>
+                        <Camera size={14} />
+                      </button>
+                    )}
+                    <input type="file" accept="image/*" capture="user" ref={fileInputRef} style={{ display: 'none' }} onChange={handlePhotoUpload} />
                   </div>
-                  {isEditing && (
-                    <button onClick={() => fileInputRef.current.click()} style={{ position: 'absolute', bottom: 0, right: 0, background: 'var(--bg-panel-solid)', border: '1px solid var(--accent-primary)', borderRadius: '50%', width: '30px', height: '30px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--accent-primary)' }}>
-                      <Camera size={14} />
-                    </button>
-                  )}
-                  <input type="file" accept="image/*" capture="user" ref={fileInputRef} style={{ display: 'none' }} onChange={handlePhotoUpload} />
+
+                  <div style={{ flex: 1, minWidth: '220px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.4rem', flexWrap: 'wrap' }}>
+                      {isEditing ? (
+                        <input type="text" name="name" value={editFormData.name || ''} onChange={handleEditChange} className="glass-input" style={{ fontSize: '1.25rem', fontWeight: 700 }} />
+                      ) : (
+                        <h2 style={{ fontSize: '1.4rem', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>{activePatient.name}</h2>
+                      )}
+                      
+                      {/* Clinical Health Status Badge */}
+                      <span className={`badge ${healthStatus.className}`} style={{ fontSize: '0.8rem', padding: '0.3rem 0.85rem' }}>
+                        <StatusIcon size={13} /> {healthStatus.status}
+                      </span>
+                    </div>
+
+                    <div style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', display: 'flex', gap: '0.85rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                      <span>ID: <code>{activePatient.id}</code></span>
+                      <span>•</span>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}><MapPin size={13} /> Room {activePatient.room_number || 'N/A'}</span>
+                      <span>•</span>
+                      <span>Blood: <strong style={{ color: '#ff4d4f' }}>{activePatient.blood_group || 'N/A'}</strong></span>
+                    </div>
+                  </div>
                 </div>
 
-                <div style={{ flex: 1, minWidth: '220px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.4rem', flexWrap: 'wrap' }}>
-                    {isEditing ? (
-                      <input type="text" name="name" value={editFormData.name || ''} onChange={handleEditChange} className="glass-input" style={{ fontSize: '1.25rem', fontWeight: 700 }} />
-                    ) : (
-                      <h2 style={{ fontSize: '1.4rem', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>{activePatient.name}</h2>
-                    )}
-                    
-                    {/* Clinical Health Status Badge */}
-                    <span className={`badge ${healthStatus.className}`} style={{ fontSize: '0.8rem', padding: '0.3rem 0.85rem' }}>
-                      <StatusIcon size={13} /> {healthStatus.status}
-                    </span>
-                  </div>
-
-                  <div style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', display: 'flex', gap: '0.85rem', flexWrap: 'wrap', alignItems: 'center' }}>
-                    <span>ID: <code>{activePatient.id}</code></span>
-                    <span>•</span>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}><MapPin size={13} /> Room {activePatient.room_number || 'N/A'}</span>
-                    <span>•</span>
-                    <span>Blood: <strong style={{ color: '#ff4d4f' }}>{activePatient.blood_group || 'N/A'}</strong></span>
-                  </div>
+                {/* Header Action Buttons */}
+                <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0, alignSelf: 'flex-start' }}>
+                  {!isEditing ? (
+                    <button className="btn-secondary" onClick={() => setIsEditing(true)} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.45rem 0.9rem', fontSize: '0.85rem', minHeight: '36px' }}>
+                      <Edit2 size={14} /> Edit Profile
+                    </button>
+                  ) : (
+                    <>
+                      <button onClick={() => { setEditFormData(activePatient); setIsEditing(false); }} style={{ background: 'transparent', border: '1px solid var(--glass-border)', color: 'var(--text-secondary)', padding: '0.45rem 0.9rem', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem' }}>
+                        <X size={14} /> Cancel
+                      </button>
+                      <button className="btn-primary" onClick={handleSaveProfile} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.45rem 0.9rem', fontSize: '0.85rem', minHeight: '36px' }}>
+                        <Save size={14} /> Save Changes
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             </div>

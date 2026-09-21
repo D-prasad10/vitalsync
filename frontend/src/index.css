@@ -414,6 +414,10 @@ input, button, select, textarea {
   isolation: isolate;
 }
 
+.main-content {
+  padding: 0;
+}
+
 .app-container.authenticated .main-content {
   margin-left: 0;
   width: auto;
@@ -422,6 +426,7 @@ input, button, select, textarea {
   min-width: 0;
   overflow-y: auto;
   overflow-x: hidden;
+  padding: 1.5rem 2rem;
   transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -1260,6 +1265,10 @@ input, button, select, textarea {
   .alert-panel-card {
     padding: 0.55rem 0.75rem;
   }
+
+  .app-container.authenticated .main-content {
+    padding: var(--space-4) !important;
+  }
 }
 
 @media (max-width: 640px) {
@@ -1275,8 +1284,9 @@ input, button, select, textarea {
     padding: 0 var(--space-4);
   }
 
-  .main-content {
-    padding: var(--space-4);
+  .main-content,
+  .app-container.authenticated .main-content {
+    padding: var(--space-3) !important;
   }
 
   .patient-grid {

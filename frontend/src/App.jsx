@@ -123,7 +123,7 @@ function App() {
         )}
 
         <div className={`main-layout ${currentUser ? 'with-topbar' : ''}`}>
-          <main className="main-content" style={{ padding: currentUser ? '1.5rem 2rem' : '0' }}>
+          <main className="main-content">
             <Routes>
               <Route
                 path="/login"

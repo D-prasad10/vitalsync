@@ -28,7 +28,8 @@ const Sidebar = ({ user, onLogout, isOpen, onClose }) => {
           <div className="sidebar-logo">
             <HeartPulse size={24} color="var(--accent-primary)" />
             <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.15 }}>
-              <span style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>SWASTHYAEDGE</span>
+              <span style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>Vitalsync</span>
+              <span style={{ fontSize: '0.7rem', color: 'var(--accent-primary)', fontWeight: 500 }}>Clinical Telemetry</span>
             </div>
           </div>
           <button className="sidebar-close-btn" onClick={onClose} aria-label="Close Sidebar">
@@ -121,7 +122,7 @@ const Sidebar = ({ user, onLogout, isOpen, onClose }) => {
           {user.role === 'staff' && (
             <>
               <NavLink
-                to="/staff"
+                to="/staff-management"
                 className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
                 onClick={handleNavClick}
               >
