@@ -1,0 +1,6 @@
+timestamp,temperature_c,humidity_percent,pressure_hpa,ecg_raw,ecg_lead_off,max30100_ir_raw,max30100_red_raw,acc_x,acc_y,acc_z,gyro_x,gyro_y,gyro_z,air_quality_alert,gps_fix,gps_satellites
+2026-09-21T18:30:00+05:30,31.2,65.0,1008.4,512,false,18420,16210,120,-40,16200,12,4,8,false,true,8
+2026-09-21T18:30:01+05:30,31.2,65.1,1008.3,518,false,18510,16280,125,-42,16190,13,5,8,false,true,8
+2026-09-21T18:30:02+05:30,31.3,65.2,1008.4,505,false,18380,16190,118,-38,16210,11,4,7,false,true,8
+2026-09-21T18:30:03+05:30,31.3,65.2,1008.2,525,false,18620,16350,130,-45,16180,14,5,9,false,true,8
+2026-09-21T18:30:04+05:30,31.4,65.3,1008.3,510,false,18490,16240,122,-41,16200,12,4,8,false,true,8

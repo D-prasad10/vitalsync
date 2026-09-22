@@ -3,7 +3,8 @@ import { Line } from 'react-chartjs-2';
 import {
   Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend
 } from 'chart.js';
-import { Activity, HeartPulse, Thermometer, Wind } from 'lucide-react';
+import { Activity, HeartPulse, Thermometer, Wind, Cpu } from 'lucide-react';
+import AiRiskCard, { AiRiskBadge } from './AiRiskCard';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
 ChartJS.defaults.animation = false;
@@ -249,6 +250,9 @@ const HealthScorePanel = ({ currentData, historyData }) => {
         </div>
       </div>
 
+      {/* AI Telemetry Risk Engine Card */}
+      <AiRiskCard ai={latestData.ai} telemetryPoint={latestData} />
+
       {/* Vitals Status Table */}
       <div>
         <h3 style={{ fontSize: '1.1rem', marginBottom: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px' }}>Vitals Status breakdown</h3>
@@ -278,11 +282,19 @@ const HealthScorePanel = ({ currentData, historyData }) => {
               </td>
               <td style={{ padding: '0.75rem 0', textAlign: 'right', color: tempStatus.color, fontWeight: 600 }}>{tempStatus.text}</td>
             </tr>
-            <tr>
+            <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
               <td style={{ padding: '0.75rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <Wind size={16} color="#00d2ff" /> Oxygen Level (SpO2)
               </td>
               <td style={{ padding: '0.75rem 0', textAlign: 'right', color: spo2Status.color, fontWeight: 600 }}>{spo2Status.text}</td>
+            </tr>
+            <tr>
+              <td style={{ padding: '0.75rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Cpu size={16} color="var(--accent-primary)" /> AI Anomaly Risk
+              </td>
+              <td style={{ padding: '0.75rem 0', textAlign: 'right' }}>
+                <AiRiskBadge ai={latestData.ai} telemetryPoint={latestData} />
+              </td>
             </tr>
           </tbody>
         </table>

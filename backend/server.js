@@ -157,4 +157,3 @@ if (require.main === module) {
 }
 
 module.exports = { app, server, io, deviceService, telemetryService, alertService, aiService };
-
