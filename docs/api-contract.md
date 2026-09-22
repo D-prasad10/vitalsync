@@ -1,21 +1,39 @@
-# SwasthyaEdge (VitalsSync) Backend API Contract
+# SWASTHYAEDGE (VitalsSync) Backend API Contract & Socket.IO Specification
 
-This document provides a comprehensive, verified contract for every HTTP and WebSocket API endpoint currently implemented in `backend/server.js`.
+This document provides a comprehensive, verified contract for every HTTP and WebSocket API endpoint implemented in the SWASTHYAEDGE backend.
 
-**Base URL**: `http://localhost:5001` (or `http://<HOST_LAN_IP>:5001`)  
-**Protocols**: HTTP/1.1 (Express 5.2.1) and WebSocket (Socket.IO v4.8.3)  
-**Content-Type**: `application/json`
+- **Base URL**: `http://localhost:5001` (or `http://<HOST_LAN_IP>:5001`)
+- **Protocols**: HTTP/1.1 (Express) and WebSocket (Socket.IO)
+- **Content-Type**: `application/json`
 
 ---
 
-## 1. Authentication & OTP Endpoints
+## 1. Authentication & Role-Based Authorization (RBAC)
+
+All clinical and administrative endpoints require authentication. The server validates signed HMAC-SHA256 tokens supplied via any of the following mechanisms:
+- Standard HTTP header: `Authorization: Bearer <token>`
+- Direct header: `Authorization: <token>`
+- Custom header: `x-auth-token: <token>`
+- Query parameter: `?token=<token>`
+
+Hardware ingestion endpoints (`/api/telemetry/esp8266`, `/api/telemetry`, `/api/hardware/telemetry`) and hardware config discovery remain machine-accessible without authentication.
+
+### Development Fallback Behavior
+- When `NODE_ENV !== 'production'`, if external SMS (`FAST2SMS_API_KEY`) or Email (`EMAIL_USER`/`EMAIL_PASS`) services are unconfigured, the backend includes `{ "devOtp": "..." }` in the response for offline testing and automated suites.
+- When `NODE_ENV === 'production'`, `devOtp` is strictly suppressed and never returned or leaked under any circumstances.
+
+### Roles & Permissions Matrix
+- **`doctor`**: Highest clinical privilege. Can create/modify patients, set vital safety thresholds, manage devices, acknowledge/resolve alerts, and manage hospital staff.
+- **`caretaker`**: Clinical monitoring and patient care. Can view/update patient records, monitor vitals/history, assign paired devices, and acknowledge/resolve emergency alerts.
+- **`staff`**: Hospital administrative staff. Can manage staff directory and register patient profiles.
+- **`patient`**: Patient portal access for self-monitoring telemetry and personal thresholds.
+
+---
 
 ### 1.1 Request One-Time Password (OTP)
 - **Method**: `POST`
 - **Path**: `/api/auth/send-otp`
-- **Purpose**: Generates a random 6-digit verification code for a mobile number, email, and role. Attempts SMS delivery via Fast2SMS (`FAST2SMS_API_KEY`), falls back to Email via Nodemailer (`EMAIL_USER`, `EMAIL_PASS`), or logs the OTP to server console / response in development mode. If the user does not exist in the `staff` table, they are automatically registered.
-- **Authentication**: None (Public).
-- **Request Headers**: `Content-Type: application/json`
+- **Authentication**: None (Public)
 - **Request Body**:
   ```json
   {
@@ -24,72 +42,76 @@ This document provides a comprehensive, verified contract for every HTTP and Web
     "role": "doctor"
   }
   ```
-  *Allowed values for `role`*: `"doctor"`, `"caretaker"`, `"staff"`, `"patient"`.
-- **Success Response (200 OK)**:
+  *Allowed roles*: `"doctor"`, `"caretaker"`, `"staff"`, `"patient"`.
+- **Success Response (200 OK - Non-Production)**:
   ```json
   {
     "success": true,
     "message": "OTP sent to your mobile 9876543210",
-    "devOtp": "654321"
+    "devOtp": "123456"
   }
   ```
-  *(Note: `devOtp` is only present when SMS and Email services are unconfigured).*
+- **Success Response (200 OK - Production / Dispatched)**:
+  ```json
+  {
+    "success": true,
+    "message": "OTP sent to your mobile 9876543210"
+  }
+  ```
 - **Error Responses**:
-  - `400 Bad Request`:
-    ```json
-    { "error": "Role, mobile, and email are required." }
-    ```
-  - `500 Internal Server Error`:
-    ```json
-    { "error": "Database error." }
-    ```
-    or
-    ```json
-    { "error": "Failed to register account." }
-    ```
+  - `400 Bad Request`: `{ "error": "Role, mobile, and email are required." }` or `{ "error": "Invalid role \"...\". Allowed roles: doctor, caretaker, staff, patient" }`
+  - `500 Internal Server Error`: `{ "error": "Failed to register account." }`
 
 ---
 
 ### 1.2 Verify One-Time Password (OTP)
 - **Method**: `POST`
 - **Path**: `/api/auth/verify-otp`
-- **Purpose**: Validates the 6-digit OTP against the server's in-memory OTP store (expires after 5 minutes). On success, clears the OTP and returns the user's role and identity.
-- **Authentication**: None (Public).
+- **Authentication**: None (Public)
 - **Request Body**:
   ```json
   {
     "mobile": "9876543210",
-    "otp": "654321"
+    "otp": "123456"
   }
   ```
 - **Success Response (200 OK)**:
   ```json
   {
     "success": true,
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
     "user": {
+      "id": "DR-123456",
+      "staffId": "DR-123456",
       "role": "doctor",
-      "name": "Dr. Sarah Jenkins",
-      "staffId": "DR-123456"
+      "name": "Dr. Sarah Jenkins"
     }
   }
   ```
 - **Error Responses**:
-  - `400 Bad Request` (Missing parameters):
-    ```json
-    { "error": "Mobile and OTP are required." }
-    ```
-  - `400 Bad Request` (Session missing or invalid):
-    ```json
-    { "error": "No OTP request found. Please request a new OTP." }
-    ```
-  - `400 Bad Request` (Expired):
-    ```json
-    { "error": "OTP has expired. Please request a new one." }
-    ```
-  - `400 Bad Request` (Incorrect):
-    ```json
-    { "error": "Incorrect OTP. Please try again." }
-    ```
+  - `400 Bad Request`: `{ "error": "Mobile and OTP are required." }`
+  - `400 Bad Request`: `{ "error": "Incorrect OTP. Please try again." }`
+  - `400 Bad Request`: `{ "error": "OTP has expired. Please request a new one." }`
+
+---
+
+### 1.3 Get Current Authenticated Session
+- **Method**: `GET`
+- **Path**: `/api/auth/me`
+- **Authentication**: Required (`doctor`, `caretaker`, `staff`, `patient`)
+- **Headers**: `Authorization: Bearer <token>`
+- **Success Response (200 OK)**:
+  ```json
+  {
+    "success": true,
+    "user": {
+      "id": "DR-123456",
+      "staffId": "DR-123456",
+      "role": "doctor",
+      "name": "Dr. Sarah Jenkins"
+    }
+  }
+  ```
 
 ---
 
@@ -98,9 +120,7 @@ This document provides a comprehensive, verified contract for every HTTP and Web
 ### 2.1 List All Staff
 - **Method**: `GET`
 - **Path**: `/api/staff`
-- **Purpose**: Retrieves all registered hospital doctors, caretakers, and clinical staff.
-- **Authentication**: None at API layer (Frontend guards access to `doctor` and `staff` roles).
-- **Request Parameters**: None.
+- **Authentication**: Required (Valid token)
 - **Success Response (200 OK)**:
   ```json
   [
@@ -111,37 +131,21 @@ This document provides a comprehensive, verified contract for every HTTP and Web
       "name": "Dr. Ashish Patra",
       "mobile": "9348505908",
       "email": "ashishpatra752006@gmail.com"
-    },
-    {
-      "id": 2,
-      "staff_id": "CR-00456",
-      "role": "caretaker",
-      "name": "Caretaker Ashish",
-      "mobile": "9348505908",
-      "email": "ashishpatra752006@gmail.com"
     }
   ]
   ```
-- **Error Responses**:
-  - `500 Internal Server Error`:
-    ```json
-    { "error": "Database error message string" }
-    ```
-
----
 
 ### 2.2 Register New Staff Member
 - **Method**: `POST`
 - **Path**: `/api/staff`
-- **Purpose**: Creates a new staff record in SQLite table `staff`.
-- **Authentication**: None at API layer.
+- **Authentication**: Required (`doctor`, `staff`)
 - **Request Body**:
   ```json
   {
     "staff_id": "DR-88901",
     "role": "doctor",
     "name": "Dr. Elena Rostova",
-    "mobile": "9876543210",
+    "mobile": "9876500112",
     "email": "elena.rostova@hospital.org"
   }
   ```
@@ -149,32 +153,14 @@ This document provides a comprehensive, verified contract for every HTTP and Web
   ```json
   {
     "success": true,
-    "id": 3
+    "id": 5
   }
   ```
-- **Error Responses**:
-  - `400 Bad Request`:
-    ```json
-    { "error": "All fields are required." }
-    ```
-  - `409 Conflict`:
-    ```json
-    { "error": "Staff ID \"DR-88901\" already exists." }
-    ```
-  - `500 Internal Server Error`:
-    ```json
-    { "error": "Database error message string" }
-    ```
-
----
 
 ### 2.3 Delete Staff Member
 - **Method**: `DELETE`
 - **Path**: `/api/staff/:id`
-- **Purpose**: Removes a staff record from SQLite by database row ID.
-- **Authentication**: None at API layer.
-- **Path Parameters**:
-  - `id` (integer): Staff row ID.
+- **Authentication**: Required (`doctor`, `staff`)
 - **Success Response (200 OK)**:
   ```json
   {
@@ -182,11 +168,6 @@ This document provides a comprehensive, verified contract for every HTTP and Web
     "changes": 1
   }
   ```
-- **Error Responses**:
-  - `500 Internal Server Error`:
-    ```json
-    { "error": "Database error message string" }
-    ```
 
 ---
 
@@ -195,310 +176,168 @@ This document provides a comprehensive, verified contract for every HTTP and Web
 ### 3.1 List All Patients
 - **Method**: `GET`
 - **Path**: `/api/patients`
-- **Purpose**: Retrieves all registered patients including demographic attributes, assigned medical staff, and paired IoT hardware device identifier.
-- **Authentication**: None at API layer.
-- **Request Parameters**: None.
+- **Authentication**: Required (`doctor`, `caretaker`, `staff`)
 - **Success Response (200 OK)**:
   ```json
   [
     {
       "id": 1,
-      "name": "John Doe",
-      "age": 45,
-      "room_number": "101A",
+      "name": "Ramesh Patel",
+      "age": 58,
       "gender": "Male",
-      "mobile": "+1 555-0100",
-      "weight": 175.5,
-      "guardian_contact": "+1 555-0101",
-      "blood_group": "O+",
-      "photo": null,
-      "doctor_name": null,
-      "doctor_phone": null,
-      "doctor_specialization": null,
-      "doctor_email": null,
-      "device_id": "ESP8266-001"
+      "blood_group": "B+",
+      "condition": "Post-Myocardial Infarction Recovery",
+      "room": "ICU-204",
+      "bed": "B-12",
+      "device_id": "ESP8266-001",
+      "created_at": 1726850000000
     }
   ]
   ```
-- **Error Responses**:
-  - `500 Internal Server Error`:
-    ```json
-    { "error": "Database error message string" }
-    ```
-
----
 
 ### 3.2 Get Single Patient Details
 - **Method**: `GET`
 - **Path**: `/api/patients/:id`
-- **Purpose**: Retrieves full demographic and assigned doctor record for an individual patient.
-- **Authentication**: None at API layer.
-- **Path Parameters**:
-  - `id` (integer): Patient database ID.
+- **Authentication**: Required
 - **Success Response (200 OK)**:
   ```json
   {
     "id": 1,
-    "name": "John Doe",
-    "age": 45,
-    "room_number": "101A",
+    "name": "Ramesh Patel",
+    "age": 58,
     "gender": "Male",
-    "mobile": "+1 555-0100",
-    "weight": 175.5,
-    "guardian_contact": "+1 555-0101",
-    "blood_group": "O+",
-    "photo": null,
-    "doctor_name": "Dr. Ashish Patra",
-    "doctor_phone": "9348505908",
-    "doctor_specialization": "Cardiology",
-    "doctor_email": "ashishpatra752006@gmail.com",
+    "blood_group": "B+",
+    "condition": "Post-Myocardial Infarction Recovery",
+    "room": "ICU-204",
+    "bed": "B-12",
     "device_id": "ESP8266-001"
   }
   ```
-- **Error Responses**:
-  - `404 Not Found`:
-    ```json
-    { "error": "Patient not found" }
-    ```
-  - `500 Internal Server Error`:
-    ```json
-    { "error": "Database error message string" }
-    ```
-
----
+- **Error Response**: `404 Not Found` if patient ID does not exist.
 
 ### 3.3 Register New Patient
 - **Method**: `POST`
 - **Path**: `/api/patients`
-- **Purpose**: Inserts a new patient and automatically initializes default safety thresholds (HR: 60–100, BP Sys: 130, BP Dia: 85, SpO2: 95, Temp: 99.5) in the `thresholds` table.
-- **Authentication**: None at API layer.
+- **Authentication**: Required (`doctor`, `caretaker`, `staff`)
 - **Request Body**:
   ```json
   {
-    "name": "Alice Walker",
-    "age": 52,
+    "name": "Sunita Sharma",
+    "age": 46,
     "gender": "Female",
-    "blood_group": "B+",
-    "weight": 64.2,
-    "mobile": "+91 9876543210",
-    "guardian_contact": "+91 9876543211",
-    "room_number": "302B"
+    "blood_group": "O+",
+    "condition": "Cardiac Arrhythmia Surveillance",
+    "room": "Ward-3B",
+    "bed": "Bed-05",
+    "device_id": "ESP8266-002"
   }
   ```
-- **Success Response (200 OK)**:
+- **Success Response (200 OK / 201 Created)**:
   ```json
   {
     "success": true,
+    "id": 2,
     "patient": {
-      "id": 3,
-      "name": "Alice Walker",
-      "age": 52,
-      "room_number": "302B",
-      "gender": "Female",
-      "mobile": "+91 9876543210",
-      "weight": 64.2,
-      "guardian_contact": "+91 9876543211",
-      "blood_group": "B+",
-      "photo": null,
-      "doctor_name": null,
-      "doctor_phone": null,
-      "doctor_specialization": null,
-      "doctor_email": null,
-      "device_id": null
+      "id": 2,
+      "name": "Sunita Sharma"
     }
   }
   ```
-- **Error Responses**:
-  - `500 Internal Server Error`:
-    ```json
-    { "error": "Database error message string" }
-    ```
-
----
 
 ### 3.4 Update Patient Profile
 - **Method**: `PUT`
 - **Path**: `/api/patients/:id`
-- **Purpose**: Updates demographic details, contact numbers, room assignment, base64 photo, and assigned doctor credentials.
-- **Authentication**: None at API layer.
-- **Path Parameters**:
-  - `id` (integer): Patient database ID.
-- **Request Body**:
-  ```json
-  {
-    "name": "Alice Walker",
-    "age": 53,
-    "gender": "Female",
-    "blood_group": "B+",
-    "weight": 63.5,
-    "mobile": "+91 9876543210",
-    "guardian_contact": "+91 9876543211",
-    "photo": "data:image/jpeg;base64,...",
-    "doctor_name": "Dr. Ashish Patra",
-    "doctor_phone": "9348505908",
-    "doctor_specialization": "Internal Medicine",
-    "doctor_email": "ashishpatra752006@gmail.com",
-    "room_number": "302A"
-  }
-  ```
+- **Authentication**: Required (`doctor`, `caretaker`)
+- **Request Body**: One or more fields to update (`name`, `age`, `gender`, `condition`, `room`, `bed`, `device_id`).
 - **Success Response (200 OK)**:
   ```json
   {
     "success": true,
-    "changes": 1
+    "id": 1
   }
   ```
-- **Error Responses**:
-  - `500 Internal Server Error`:
-    ```json
-    { "error": "Database error message string" }
-    ```
 
 ---
 
-## 4. Telemetry History & Clinical Thresholds
+## 4. Telemetry History & Clinical Safety Thresholds
 
-### 4.1 Get Patient 7-Day History
+### 4.1 Get Patient Historical Logs
 - **Method**: `GET`
-- **Path**: `/api/patients/:id/history`
-- **Purpose**: Retrieves all stored telemetry entries from SQLite table `sensor_logs` logged within the last 7 calendar days (`timestamp > now - 7 days`), ordered chronologically ascending.
-- **Authentication**: None at API layer.
-- **Path Parameters**:
-  - `id` (integer): Patient database ID.
+- **Path**: `/api/patients/:id/history` or `/api/patients/:id/logs`
+- **Query Parameters**: `limit` (default: 50, max: 500)
+- **Authentication**: Required
 - **Success Response (200 OK)**:
   ```json
   [
     {
-      "id": 104,
+      "id": 240,
       "patient_id": 1,
       "hr": null,
       "bp_sys": null,
       "bp_dia": null,
       "spo2": null,
-      "temp": 98.4,
-      "timestamp": 1726848000000,
+      "temp": 83.3,
       "health_score": 100,
-      "humidity": 58.2,
-      "pressure": 1012.4,
-      "ecg_val": 514,
+      "humidity": 62.0,
+      "pressure": 1008.4,
+      "ecg_val": 512,
       "mq135": "NORMAL",
-      "gps_lat": null,
-      "gps_lng": null,
-      "raw_payload": "{...}",
-      "dht_temp": 25.8,
-      "bmp_temp": 25.7,
-      "max_ir": 18200,
-      "max_red": 15100,
+      "timestamp": 1726852000000,
+      "dht_temp": 28.5,
+      "bmp_temp": 28.5,
+      "max_ir": 18432,
+      "max_red": 15200,
       "device_ip": "192.168.1.105"
     }
   ]
   ```
-- **Error Responses**:
-  - `500 Internal Server Error`:
-    ```json
-    { "error": "Database error message string" }
-    ```
-
----
 
 ### 4.2 Get Latest Telemetry Reading
 - **Method**: `GET`
 - **Path**: `/api/patients/:id/latest`
-- **Purpose**: Returns the single most recent sensor log recorded for a patient.
-- **Authentication**: None at API layer.
-- **Path Parameters**:
-  - `id` (integer): Patient database ID.
-- **Success Response (200 OK)**:
-  ```json
-  {
-    "id": 142,
-    "patient_id": 1,
-    "hr": null,
-    "bp_sys": null,
-    "bp_dia": null,
-    "spo2": null,
-    "temp": 98.6,
-    "timestamp": 1726851234000,
-    "health_score": 100,
-    "humidity": 60.1,
-    "pressure": 1011.8,
-    "ecg_val": 508,
-    "mq135": "NORMAL",
-    "dht_temp": 26.1,
-    "bmp_temp": 26.0,
-    "max_ir": 19040,
-    "max_red": 16120,
-    "device_ip": "192.168.1.105"
-  }
-  ```
-- **Error Responses**:
-  - `404 Not Found`:
-    ```json
-    { "error": "No telemetry data found for this patient" }
-    ```
-  - `500 Internal Server Error`:
-    ```json
-    { "error": "Database error message string" }
-    ```
+- **Authentication**: Required
+- **Success Response (200 OK)**: Returns the most recent telemetry entry or null if no logs exist.
 
----
-
-### 4.3 Get Patient Vital Thresholds
+### 4.3 Get Patient Vital Safety Thresholds
 - **Method**: `GET`
-- **Path**: `/api/patients/:id/thresholds`
-- **Purpose**: Fetches the clinical safety boundaries used to trigger automated warning alerts.
-- **Authentication**: None at API layer.
-- **Path Parameters**:
-  - `id` (integer): Patient database ID.
+- **Path**: `/api/patients/:id/thresholds` or `/api/thresholds/:patient_id`
+- **Authentication**: Required
 - **Success Response (200 OK)**:
   ```json
   {
+    "id": 1,
     "patient_id": 1,
-    "hr_max": 100,
-    "hr_min": 60,
-    "bp_sys_max": 130,
-    "bp_dia_max": 85,
-    "spo2_min": 95,
-    "temp_max": 99.5
+    "hr_min": 50,
+    "hr_max": 120,
+    "temp_max": 101.5,
+    "spo2_min": 92,
+    "bp_sys_max": 140,
+    "bp_dia_max": 90
   }
   ```
-- **Error Responses**:
-  - `500 Internal Server Error`:
-    ```json
-    { "error": "Database error message string" }
-    ```
 
----
-
-### 4.4 Set Patient Vital Thresholds
-- **Method**: `POST`
-- **Path**: `/api/patients/:id/thresholds`
-- **Purpose**: Updates or inserts clinical safety boundaries (`ON CONFLICT(patient_id) DO UPDATE`).
-- **Authentication**: None at API layer (Frontend protected).
-- **Path Parameters**:
-  - `id` (integer): Patient database ID.
+### 4.4 Set Patient Vital Safety Thresholds
+- **Method**: `POST` (or `PUT`)
+- **Path**: `/api/patients/:id/thresholds` or `/api/thresholds/:patient_id`
+- **Authentication**: Required (`doctor`)
 - **Request Body**:
   ```json
   {
-    "hr_max": 110,
     "hr_min": 55,
-    "bp_sys_max": 135,
-    "bp_dia_max": 90,
+    "hr_max": 110,
+    "temp_max": 100.4,
     "spo2_min": 94,
-    "temp_max": 100.4
+    "bp_sys_max": 135,
+    "bp_dia_max": 85
   }
   ```
 - **Success Response (200 OK)**:
   ```json
   {
-    "success": true
+    "success": true,
+    "patientId": 1
   }
   ```
-- **Error Responses**:
-  - `500 Internal Server Error`:
-    ```json
-    { "error": "Database error message string" }
-    ```
 
 ---
 
@@ -507,61 +346,53 @@ This document provides a comprehensive, verified contract for every HTTP and Web
 ### 5.1 Ingest Hardware Telemetry
 - **Method**: `POST`
 - **Paths**:
-  - `/api/telemetry/esp8266` *(Recommended)*
-  - `/api/telemetry`
-  - `/api/hardware/telemetry`
-- **Purpose**: Primary ingestion gateway for ESP8266 firmware transmissions. Parses raw sensor parameters, normalizes units, maps device to patient, evaluates thresholds, triggers WebSocket broadcasts, and throttles DB writes.
-- **Authentication**: None (Open for IoT sensor nodes on LAN).
-- **Request Body** (Conforming to ESP8266 firmware payload):
+  - `/api/telemetry/esp8266` *(Primary)*
+  - `/api/telemetry` *(Backward-Compatible)*
+  - `/api/hardware/telemetry` *(Backward-Compatible)*
+- **Authentication**: None (Device-level ingestion)
+- **Validation**: Strict validation middleware rejects missing `deviceId`, malformed payloads, non-numeric values, or injection attacks with HTTP 400.
+- **Request Body**:
   ```json
   {
-    "ip": "192.168.1.105",
     "deviceId": "ESP8266-001",
     "patientId": 1,
-    "dhtTemp": 27.8,
-    "humidity": 59.4,
-    "bmpTemp": 27.6,
-    "pressure": 1010.5,
+    "dhtTemp": 28.5,
+    "humidity": 62.0,
+    "bmpTemp": 28.3,
+    "pressure": 1008.4,
     "ecg": 512,
     "loPlus": 0,
     "loMinus": 0,
     "mq135": 1,
-    "accX": 102,
-    "accY": -15,
-    "accZ": 980,
-    "gyroX": 3,
-    "gyroY": -1,
-    "gyroZ": 0,
-    "maxFound": true,
+    "accX": 120,
+    "accY": -30,
+    "accZ": 16320,
+    "gyroX": 5,
+    "gyroY": -2,
+    "gyroZ": 1,
+    "maxFound": 1,
     "maxIR": 18432,
     "maxRED": 15200,
-    "gpsSat": 6,
-    "gpsFix": true
+    "gpsSat": 8,
+    "gpsFix": 1,
+    "ip": "192.168.1.105"
   }
   ```
 - **Success Response (200 OK)**:
   ```json
   {
     "success": true,
-    "receivedAt": 1726852000000,
+    "receivedAt": 1726919400000,
     "deviceId": "ESP8266-001",
     "patientId": 1,
     "status": "ONLINE"
   }
   ```
-- **Error Responses**:
-  - `400 Bad Request`:
-    ```json
-    { "error": "Invalid telemetry payload: must be a JSON object" }
-    ```
-
----
 
 ### 5.2 List Monitored Hardware Devices
 - **Method**: `GET`
 - **Path**: `/api/devices`
-- **Purpose**: Lists all active or registered hardware units tracked by the in-memory heartbeat watchdog, showing online status, last seen timestamp, and paired patient ID.
-- **Authentication**: None.
+- **Authentication**: Required (`doctor`, `caretaker`, `staff`)
 - **Success Response (200 OK)**:
   ```json
   [
@@ -570,24 +401,21 @@ This document provides a comprehensive, verified contract for every HTTP and Web
       "patientId": 1,
       "ip": "192.168.1.105",
       "status": "ONLINE",
-      "lastSeen": 1726852000000,
-      "secondsAgo": 1
+      "lastSeen": 1726919400000,
+      "secondsAgo": 2
     }
   ]
   ```
 
----
-
 ### 5.3 Pair Hardware Device to Patient
 - **Method**: `POST`
 - **Path**: `/api/devices/assign`
-- **Purpose**: Associates a physical device identifier (`deviceId`) with a database patient (`patientId`) and persists the relation in the `patients` table.
-- **Authentication**: None.
+- **Authentication**: Required (`doctor`, `caretaker`, `staff`)
 - **Request Body**:
   ```json
   {
     "deviceId": "ESP8266-001",
-    "patientId": 2
+    "patientId": 1
   }
   ```
 - **Success Response (200 OK)**:
@@ -595,238 +423,120 @@ This document provides a comprehensive, verified contract for every HTTP and Web
   {
     "success": true,
     "deviceId": "ESP8266-001",
-    "patientId": 2
+    "patientId": 1
   }
   ```
-- **Error Responses**:
-  - `400 Bad Request`:
-    ```json
-    { "error": "deviceId and patientId are required." }
-    ```
-  - `500 Internal Server Error`:
-    ```json
-    { "error": "Database error message string" }
-    ```
-
----
 
 ### 5.4 Check Device Liveness Status
 - **Method**: `GET`
 - **Path**: `/api/device/status`
-- **Purpose**: High-level status check of connected hardware, including primary device status, seconds since last transmission, and list of all known units.
-- **Authentication**: None.
+- **Authentication**: Required
 - **Success Response (200 OK)**:
   ```json
   {
     "online": true,
     "deviceId": "ESP8266-001",
     "ip": "192.168.1.105",
-    "lastSeen": 1726852000000,
+    "lastSeen": 1726919400000,
     "secondsAgo": 1,
-    "devices": [
-      {
-        "deviceId": "ESP8266-001",
-        "patientId": 1,
-        "ip": "192.168.1.105",
-        "status": "ONLINE",
-        "lastSeen": 1726852000000,
-        "secondsAgo": 1
-      }
-    ]
+    "devices": [...]
   }
   ```
 
----
+### 5.5 Hardware Poller Configuration
+- **GET `/api/hardware/config`**: Public endpoint returning current poller settings and local LAN ingestion URLs.
+- **POST `/api/hardware/config`**: Requires authentication (`doctor`, `staff`). Dynamically updates polling IP, interval, and activation.
 
-### 5.5 Get Hardware Poller Configuration
-- **Method**: `GET`
-- **Path**: `/api/hardware/config`
-- **Purpose**: Retrieves backend poller parameters, local server LAN IP address, and complete ingestion URLs for flashing into ESP8266 firmware.
-- **Authentication**: None.
-- **Success Response (200 OK)**:
-  ```json
-  {
-    "ip": "192.168.1.105",
-    "patientId": 1,
-    "pollingIntervalMs": 1500,
-    "isPolling": true,
-    "lastPollStatus": "SUCCESS",
-    "lastPollError": null,
-    "lastPollTime": 1726852000000,
-    "localLanIp": "192.168.1.50",
-    "lanIngestionUrl": "http://192.168.1.50:5001/api/telemetry/esp8266",
-    "localIngestionUrl": "http://localhost:5001/api/telemetry/esp8266"
-  }
-  ```
-
----
-
-### 5.6 Update Hardware Poller Configuration
-- **Method**: `POST`
-- **Path**: `/api/hardware/config`
-- **Purpose**: Dynamically updates the IP address of the target ESP8266 node, toggles background polling, adjusts polling frequency, and immediately triggers a test poll.
-- **Authentication**: None.
-- **Request Body**:
-  ```json
-  {
-    "ip": "192.168.1.105",
-    "patientId": 1,
-    "pollingIntervalMs": 1500,
-    "isPolling": true
-  }
-  ```
-- **Success Response (200 OK)**:
-  ```json
-  {
-    "success": true,
-    "config": {
-      "ip": "192.168.1.105",
-      "patientId": 1,
-      "pollingIntervalMs": 1500,
-      "isPolling": true,
-      "lastPollStatus": "SUCCESS",
-      "lastPollError": null,
-      "lastPollTime": 1726852005000,
-      "localLanIp": "192.168.1.50",
-      "lanIngestionUrl": "http://192.168.1.50:5001/api/telemetry/esp8266"
-    }
-  }
-  ```
-
----
-
-### 5.7 Trigger Test Pulse Diagnostic Packet
+### 5.6 Trigger Test Pulse Diagnostic Packet
 - **Method**: `POST`
 - **Path**: `/api/hardware/test-pulse`
-- **Purpose**: Injects a synthetic telemetry packet strictly conforming to the physical ESP8266 schema directly into the backend ingestion pipeline. Useful for validating WebSocket dispatch and UI rendering without live hardware connected.
-- **Authentication**: None.
-- **Request Body**: Optional property overrides (e.g. `{"dhtTemp": 31.2, "mq135": 0}`).
+- **Authentication**: Required
+- **Request Body**: Optional overrides (e.g. `{ "patientId": 2 }`).
 - **Success Response (200 OK)**:
   ```json
   {
     "success": true,
-    "telemetry": {
-      "deviceId": "ESP8266-001",
-      "patient_id": 1,
-      "patientId": 1,
-      "timestamp": 1726852010000,
-      "deviceStatus": "ONLINE",
-      "temp": 82.9,
-      "humidity": 62.0,
-      "pressure": 1008.4,
-      "ecg_val": 512,
-      "mq135": "NORMAL",
-      "healthScore": 100
-    }
+    "telemetry": { ... }
   }
   ```
 
 ---
 
-## 6. Real-Time WebSocket Interface (Socket.IO)
+## 6. Emergency Alerts API
 
-Clients connect to `ws://localhost:5001` or `http://localhost:5001` via `socket.io-client`.
+### 6.1 List Alerts
+- **Method**: `GET`
+- **Path**: `/api/alerts` (or `/api/patients/:id/alerts`)
+- **Authentication**: Required
+- **Success Response (200 OK)**: Returns list of environmental and hardware safety alerts.
 
-### 6.1 Server-to-Client Broadcasts
+### 6.2 Acknowledge / Resolve Alert
+- **Method**: `POST` or `PUT`
+- **Paths**:
+  - `/api/alerts/:id/acknowledge`
+  - `/api/alerts/:id/resolve`
+- **Authentication**: Required (`doctor`, `caretaker`)
+- **Success Response (200 OK)**:
+  ```json
+  {
+    "success": true,
+    "id": 1,
+    "status": "acknowledged"
+  }
+  ```
 
-#### A. Event: `sensor_data` / `telemetry_update`
-Broadcast whenever new telemetry arrives from ESP8266 or the poller.
-```json
-{
-  "deviceId": "ESP8266-001",
-  "patient_id": 1,
-  "patientId": 1,
-  "timestamp": 1726852010000,
-  "deviceStatus": "ONLINE",
-  "deviceIp": "192.168.1.105",
-  "dhtTemp": 28.5,
-  "bmpTemp": 28.3,
-  "temp": 82.9,
-  "temperature": {
-    "dht11": 28.5,
-    "bmp280": 28.3,
-    "displayF": 82.9
-  },
-  "humidity": 62.0,
-  "pressure": 1008.4,
-  "ecg": {
-    "value": 512,
-    "leadOffPlus": false,
-    "leadOffMinus": false,
-    "leadsConnected": true
-  },
-  "ecg_val": 512,
-  "leadOffPlus": false,
-  "leadOffMinus": false,
-  "loPlus": 0,
-  "loMinus": 0,
-  "maxFound": true,
-  "maxIR": 18432,
-  "maxRED": 15200,
-  "max30100": {
-    "connected": true,
-    "rawIR": 18432,
-    "rawRED": 15200,
-    "heartRate": null,
-    "spo2": null,
-    "statusText": "Optical Sensor Online"
-  },
-  "hr": null,
-  "heartRate": null,
-  "spo2": null,
-  "bpSys": null,
-  "bpDia": null,
-  "bp": null,
-  "mq135": "NORMAL",
-  "mq135Digital": 1,
-  "imu": {
-    "accX": 120,
-    "accY": -30,
-    "accZ": 16320,
-    "gyroX": 5,
-    "gyroY": -2,
-    "gyroZ": 1
-  },
-  "gps": {
-    "satellites": 8,
-    "latitude": null,
-    "longitude": null,
-    "fix": true
-  },
-  "healthScore": 100
-}
-```
+---
 
-#### B. Event: `emergency_alert`
-Broadcast immediately when safety threshold limits are breached or hardware disconnection occurs.
-```json
-{
-  "id": 1726852015123.45,
-  "patient_id": 1,
-  "patient_name": "John Doe",
-  "alerts": [
-    "⚠️ Hazardous Gas / Smoke Threshold Exceeded (MQ-135)",
-    "⚠️ ECG Leads Disconnected (AD8232 LO+/LO- Active)"
-  ],
-  "timestamp": 1726852015000,
-  "severity": "critical"
-}
-```
+## 7. AI Engine Integration Endpoints
 
-#### C. Event: `device_status`
-Broadcast by the watchdog timer when an active sensor node ceases transmitting for >10 seconds.
-```json
-{
-  "deviceId": "ESP8266-001",
-  "patientId": 1,
-  "status": "OFFLINE",
-  "lastSeen": 1726852000000
-}
-```
+### 7.1 Check AI Engine Status
+- **Method**: `GET`
+- **Path**: `/api/ai/status`
+- **Authentication**: Required
+- **Success Response (200 OK)**:
+  ```json
+  {
+    "configured": true,
+    "url": "http://127.0.0.1:5002",
+    "status": "ONLINE"
+  }
+  ```
 
-### 6.2 Client-to-Server Ingestion Event
+### 7.2 Get Patient AI Predictions History
+- **Method**: `GET`
+- **Path**: `/api/ai/predictions/:patientId`
+- **Authentication**: Required
+- **Query Parameters**: `limit` (default: 20)
+- **Success Response (200 OK)**:
+  ```json
+  [
+    {
+      "id": 1,
+      "patient_id": 1,
+      "device_id": "ESP8266-001",
+      "risk_level": "moderate",
+      "risk_type": "anomaly",
+      "confidence": 0.87,
+      "model_version": "v1.0.0",
+      "explanation": "Elevated ambient temperature with baseline ECG rhythm.",
+      "timestamp": 1726919400000
+    }
+  ]
+  ```
 
-#### Event: `hardware_telemetry`
-Permits edge gateways or simulators to transmit telemetry packets directly over WebSockets rather than HTTP POST.
-- **Payload**: JSON telemetry object conforming to the ingestion schema.
-- **Acknowledgment Callback**: `{ "success": true }` or `{ "error": "error message" }`.
+---
+
+## 8. Real-Time WebSocket Interface (Socket.IO)
+
+Clients connect to `http://localhost:5001` via WebSocket:
+
+### 8.1 Server-to-Client Broadcasts
+- **`sensor_data` / `telemetry_update`**: Emitted upon ingestion of normalized telemetry. Broadcast globally and to patient room `patient:${patientId}`.
+- **`emergency_alert`**: Emitted when critical conditions occur (gas detected, lead-off, threshold violation, or device timeout).
+- **`ai_prediction`**: Emitted when the AI engine returns risk evaluation for a telemetry record.
+- **`device_status`**: Emitted on device connect/disconnect/heartbeat transitions.
+
+### 8.2 Client-to-Server Actions
+- **`join_patient`**: Client joins room `patient:${patientId}` to receive targeted vital streams.
+- **`leave_patient`**: Client leaves patient room.
+- **`hardware_telemetry`**: Allows simulator or hardware clients to stream raw telemetry over WebSocket directly, with acknowledgment callback `ack({ success: true, telemetry })`.
