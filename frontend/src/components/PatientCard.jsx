@@ -1,5 +1,6 @@
 import React from 'react';
 import { User, Heart, Wind, Thermometer, Activity, MapPin, ChevronRight, Clock } from 'lucide-react';
+import { AiRiskBadge } from './AiRiskCard';
 
 const PatientCard = ({
   patient,
@@ -201,10 +202,13 @@ const PatientCard = ({
           </div>
         </div>
 
-        <span className={`badge ${statusBadgeClass}`}>
-          {status === 'Critical' && <span className="pulse-dot" style={{ width: '6px', height: '6px', backgroundColor: '#ff4d4f', marginRight: '4px' }} />}
-          {status}
-        </span>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', alignItems: 'flex-end', flexShrink: 0 }}>
+          <span className={`badge ${statusBadgeClass}`}>
+            {status === 'Critical' && <span className="pulse-dot" style={{ width: '6px', height: '6px', backgroundColor: '#ff4d4f', marginRight: '4px' }} />}
+            {status}
+          </span>
+          <AiRiskBadge ai={latestVitals?.ai} telemetryPoint={latestVitals} style={{ fontSize: '0.68rem', padding: '0.15rem 0.5rem' }} />
+        </div>
       </div>
 
       {/* Mini Vitals Grid (Real-time telemetry & sensors) */}

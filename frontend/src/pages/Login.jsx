@@ -99,7 +99,8 @@ const Login = ({ onLogin }) => {
           role: userRole,
           name: (data.user && data.user.name) || form.email.split('@')[0],
           staffId: (data.user && data.user.staffId) || (data.user && data.user.id) || '',
-          id: (data.user && data.user.id) || ''
+          id: (data.user && data.user.id) || '',
+          token: data.token || ''
         };
 
         const targetRoute = roleHome(userData);

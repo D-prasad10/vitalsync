@@ -5,6 +5,7 @@ import SensorGraph from '../components/SensorGraph';
 import HistoryBarGraph from '../components/HistoryBarGraph';
 import HealthScorePanel from '../components/HealthScorePanel';
 import PatientCard from '../components/PatientCard';
+import { AiRiskBadge } from '../components/AiRiskCard';
 import { useRealtimeData, seedPatientTelemetry, useEmergencyResponse } from '../utils/telemetryStore';
 
 const DoctorDashboard = () => {
@@ -682,6 +683,7 @@ const DoctorDashboard = () => {
                   <span className={`badge ${getPatientStatusData(activePatient.id).status === 'Critical' ? 'badge-critical' : getPatientStatusData(activePatient.id).status === 'Warning' ? 'badge-warning' : 'badge-stable'}`}>
                     {getPatientStatusData(activePatient.id).status}
                   </span>
+                  <AiRiskBadge ai={latestVitalPoint?.ai} telemetryPoint={latestVitalPoint} />
                 </div>
 
                 <div style={{ display: 'flex', gap: '1.25rem', marginTop: '0.4rem', flexWrap: 'wrap', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>

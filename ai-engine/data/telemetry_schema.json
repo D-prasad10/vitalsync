@@ -1,0 +1,85 @@
+{
+  "schema_version": "1.0",
+  "description": "VitalsSync/SwasthyaEdge ESP8266 telemetry schema",
+  "fields": {
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "required": true
+    },
+    "temperature_c": {
+      "type": "number",
+      "unit": "celsius",
+      "required": true
+    },
+    "humidity_percent": {
+      "type": "number",
+      "unit": "percent",
+      "required": true
+    },
+    "pressure_hpa": {
+      "type": "number",
+      "unit": "hPa",
+      "required": true
+    },
+    "ecg_raw": {
+      "type": "number",
+      "unit": "adc",
+      "required": true
+    },
+    "ecg_lead_off": {
+      "type": "boolean",
+      "required": true
+    },
+    "max30100_ir_raw": {
+      "type": "number",
+      "required": true
+    },
+    "max30100_red_raw": {
+      "type": "number",
+      "required": true
+    },
+    "acc_x": {
+      "type": "number",
+      "unit": "raw",
+      "required": true
+    },
+    "acc_y": {
+      "type": "number",
+      "unit": "raw",
+      "required": true
+    },
+    "acc_z": {
+      "type": "number",
+      "unit": "raw",
+      "required": true
+    },
+    "gyro_x": {
+      "type": "number",
+      "unit": "raw",
+      "required": true
+    },
+    "gyro_y": {
+      "type": "number",
+      "unit": "raw",
+      "required": true
+    },
+    "gyro_z": {
+      "type": "number",
+      "unit": "raw",
+      "required": true
+    },
+    "air_quality_alert": {
+      "type": "boolean",
+      "required": true
+    },
+    "gps_fix": {
+      "type": "boolean",
+      "required": true
+    },
+    "gps_satellites": {
+      "type": "integer",
+      "required": false
+    }
+  }
+}

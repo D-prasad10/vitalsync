@@ -3,7 +3,8 @@ import { Line } from 'react-chartjs-2';
 import {
   Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend
 } from 'chart.js';
-import { Activity, HeartPulse, Thermometer, Wind } from 'lucide-react';
+import { Activity, HeartPulse, Thermometer, Wind, Cpu } from 'lucide-react';
+import AiRiskCard, { AiRiskBadge } from './AiRiskCard';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
 ChartJS.defaults.animation = false;
@@ -286,6 +287,14 @@ const HealthScorePanel = ({ currentData, historyData }) => {
                   </td>
                   <td style={{ padding: '0.45rem 0', textAlign: 'right', color: spo2Status.color, fontWeight: 600 }}>{spo2Status.text}</td>
                 </tr>
+                <tr>
+                  <td style={{ padding: '0.45rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-primary)', fontWeight: 500 }}>
+                    <Cpu size={15} color="var(--accent-primary)" /> AI Anomaly Risk
+                  </td>
+                  <td style={{ padding: '0.45rem 0', textAlign: 'right' }}>
+                    <AiRiskBadge ai={latestData.ai} telemetryPoint={latestData} />
+                  </td>
+                </tr>
               </tbody>
             </table>
           </div>
@@ -304,6 +313,11 @@ const HealthScorePanel = ({ currentData, historyData }) => {
             </div>
           )}
         </div>
+      </div>
+
+      {/* AI Telemetry Risk Engine Card */}
+      <div style={{ marginTop: '1.25rem' }}>
+        <AiRiskCard ai={latestData.ai} telemetryPoint={latestData} />
       </div>
     </div>
   );
