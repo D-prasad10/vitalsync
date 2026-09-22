@@ -2,9 +2,10 @@ import React, { useState, useEffect, useMemo } from 'react';
 import {
   FileText, Download, Filter, Search, Calendar, CheckCircle2,
   AlertTriangle, ShieldAlert, Heart, Wind, Thermometer, Activity,
-  Printer, User, Stethoscope, Clock, Database, ChevronRight
+  Printer, User, Stethoscope, Clock, Database, ChevronRight, Cpu
 } from 'lucide-react';
 import SensorGraph from '../components/SensorGraph';
+import { AiRiskBadge, extractAiInfo } from '../components/AiRiskCard';
 
 const Reports = () => {
   const [patients, setPatients] = useState([]);
@@ -237,18 +238,23 @@ const Reports = () => {
       return;
     }
 
-    const headers = ['Timestamp', 'Patient ID', 'Patient Name', 'Heart Rate (bpm)', 'SpO2 (%)', 'Temperature (F)', 'BP Systolic', 'BP Diastolic', 'Health Score'];
-    const rows = filteredHistory.map(d => [
-      new Date(d.timestamp || Date.now()).toLocaleString(),
-      selectedPatient.id,
-      `"${selectedPatient.name}"`,
-      d.hr ?? d.heart_rate ?? '',
-      d.spo2 ?? '',
-      d.temp ?? d.temperature ?? '',
-      d.bp_sys ?? d.bpSys ?? '',
-      d.bp_dia ?? d.bpDia ?? '',
-      d.health_score ?? d.healthScore ?? ''
-    ]);
+    const headers = ['Timestamp', 'Patient ID', 'Patient Name', 'Heart Rate (bpm)', 'SpO2 (%)', 'Temperature (F)', 'BP Systolic', 'BP Diastolic', 'Health Score', 'AI Risk Level', 'AI Anomaly Score'];
+    const rows = filteredHistory.map(d => {
+      const ai = extractAiInfo(d.ai, d);
+      return [
+        new Date(d.timestamp || Date.now()).toLocaleString(),
+        selectedPatient.id,
+        `"${selectedPatient.name}"`,
+        d.hr ?? d.heart_rate ?? '',
+        d.spo2 ?? '',
+        d.temp ?? d.temperature ?? '',
+        d.bp_sys ?? d.bpSys ?? '',
+        d.bp_dia ?? d.bpDia ?? '',
+        d.health_score ?? d.healthScore ?? '',
+        ai.available ? ai.riskLevel : 'unavailable',
+        ai.anomalyScore != null ? ai.anomalyScore : ''
+      ];
+    });
 
     const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
     const encodedUri = encodeURI(csvContent);
@@ -581,12 +587,14 @@ const Reports = () => {
                     <th>Blood Pressure (mmHg)</th>
                     <th>Temperature (°F)</th>
                     <th>Patient Status</th>
+                    <th>AI Risk</th>
+                    <th>Anomaly Score</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredHistory.length === 0 ? (
                     <tr>
-                      <td colSpan={7} style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-secondary)' }}>
+                      <td colSpan={9} style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-secondary)' }}>
                         <Database size={28} style={{ opacity: 0.3, marginBottom: '0.5rem' }} />
                         <div>No telemetry readings available for this patient in the selected timeframe.</div>
                       </td>
@@ -604,6 +612,7 @@ const Reports = () => {
                       const bpDisplay = (sys != null && dia != null) ? `${sys}/${dia} mmHg` : (d.bp ? `${d.bp} mmHg` : '--');
                       const isAlert = (hr > 100 || hr < 50 || spo2 < 95 || temp > 100.4);
                       const isCritical = (hr > 120 || hr < 40 || spo2 < 90 || temp > 103);
+                      const ai = extractAiInfo(d.ai, d);
 
                       return (
                         <tr key={i}>
@@ -621,6 +630,12 @@ const Reports = () => {
                             <span className={`badge ${isCritical ? 'badge-critical' : isAlert ? 'badge-warning' : 'badge-stable'}`}>
                               {isCritical ? 'Critical' : isAlert ? 'Warning' : 'Stable'}
                             </span>
+                          </td>
+                          <td>
+                            <AiRiskBadge ai={d.ai} telemetryPoint={d} />
+                          </td>
+                          <td style={{ fontWeight: 600, color: ai.anomalyScore != null ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+                            {ai.anomalyScore != null ? ai.anomalyScore.toFixed(4) : 'Unavailable'}
                           </td>
                         </tr>
                       );

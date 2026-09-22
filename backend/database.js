@@ -75,6 +75,8 @@ const db = new sqlite3.Database(dbPath, (err) => {
           gps_lat REAL DEFAULT NULL,
           gps_lng REAL DEFAULT NULL,
           raw_payload TEXT DEFAULT NULL,
+          ai_risk_level TEXT DEFAULT NULL,
+          ai_anomaly_score REAL DEFAULT NULL,
           FOREIGN KEY (patient_id) REFERENCES patients(id)
         )
       `, () => {
@@ -91,6 +93,8 @@ const db = new sqlite3.Database(dbPath, (err) => {
         db.run(`ALTER TABLE sensor_logs ADD COLUMN max_ir INTEGER`, () => {});
         db.run(`ALTER TABLE sensor_logs ADD COLUMN max_red INTEGER`, () => {});
         db.run(`ALTER TABLE sensor_logs ADD COLUMN device_ip TEXT`, () => {});
+        db.run(`ALTER TABLE sensor_logs ADD COLUMN ai_risk_level TEXT DEFAULT NULL`, () => {});
+        db.run(`ALTER TABLE sensor_logs ADD COLUMN ai_anomaly_score REAL DEFAULT NULL`, () => {});
       });
 
       // Staff Table (doctors and caretakers who can log in)

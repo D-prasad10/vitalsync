@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import PatientCard from '../components/PatientCard';
 import SensorGraph from '../components/SensorGraph';
+import AiRiskCard, { AiRiskBadge } from '../components/AiRiskCard';
 import { useRealtimeData, seedPatientTelemetry } from '../utils/telemetryStore';
 
 const FieldBlock = ({ label, value, editing, name, onChange, type = 'text', children }) => (
@@ -291,6 +292,7 @@ const PatientDashboard = () => {
                     <span className={`badge ${healthStatus.className}`} style={{ fontSize: '0.8rem', padding: '0.3rem 0.85rem' }}>
                       <StatusIcon size={13} /> {healthStatus.status}
                     </span>
+                    <AiRiskBadge ai={latestVitalPoint?.ai} telemetryPoint={latestVitalPoint} />
                   </div>
 
                   <div style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', display: 'flex', gap: '0.85rem', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -398,6 +400,9 @@ const PatientDashboard = () => {
                   Atmospheric room humidity
                 </div>
               </div>
+
+              {/* AI Risk & Anomaly Assessment */}
+              <AiRiskCard ai={latestVitalPoint?.ai} telemetryPoint={latestVitalPoint} variant="metric" />
             </div>
 
             {/* 4. Sensor Telemetry Graphs (Heart Rate, SpO2, Blood Pressure, Body Temp) */}
