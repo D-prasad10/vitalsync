@@ -276,11 +276,11 @@ const Reports = () => {
       {/* ── 1. Page Header Bar (Screen only, hidden on print) ── */}
       <div className="no-print" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.75rem', flexWrap: 'wrap', gap: '1rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <div style={{ width: '42px', height: '42px', borderRadius: '12px', background: 'rgba(0,210,255,0.1)', border: '1px solid rgba(0,210,255,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ width: '42px', height: '42px', borderRadius: '12px', background: 'var(--accent-gradient-subtle)', border: '1px solid var(--teal-border)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <FileText size={24} style={{ color: 'var(--accent-primary)' }} />
           </div>
           <div>
-            <h1 className="glass-header" style={{ marginBottom: '0.2rem', fontSize: '1.6rem' }}>Clinical Reports Center</h1>
+            <h1 className="glass-header" style={{ marginBottom: '0.2rem', fontSize: '1.6rem' }}>Clinical Reports &amp; Management</h1>
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', margin: 0 }}>
               Generate, print, and export verified clinical vitals reports and 7-day health trend dossiers
             </p>
@@ -334,7 +334,7 @@ const Reports = () => {
         </div>
 
         {/* Timeframe Toggle Buttons */}
-        <div style={{ display: 'flex', gap: '0.35rem', background: 'rgba(0,0,0,0.2)', padding: '0.25rem', borderRadius: '8px', border: '1px solid var(--glass-border)' }}>
+        <div style={{ display: 'flex', gap: '0.35rem', background: 'var(--bg-surface-alt)', padding: '0.25rem', borderRadius: '8px', border: '1px solid var(--border-light)' }}>
           {[
             { id: '24h', label: '24-Hour Log' },
             { id: '3d', label: '3-Day Trend' },
@@ -344,15 +344,15 @@ const Reports = () => {
               key={t.id}
               onClick={() => setTimeframe(t.id)}
               style={{
-                padding: '0.4rem 0.85rem',
+                padding: '0.45rem 0.85rem',
                 borderRadius: '6px',
                 border: 'none',
                 background: timeframe === t.id ? 'var(--accent-primary)' : 'transparent',
-                color: timeframe === t.id ? '#000' : 'var(--text-secondary)',
+                color: timeframe === t.id ? '#ffffff' : 'var(--text-secondary)',
                 fontWeight: timeframe === t.id ? 700 : 500,
                 fontSize: '0.8rem',
                 cursor: 'pointer',
-                transition: 'all 0.2s ease'
+                transition: 'all 0.15s ease'
               }}
             >
               {t.label}
@@ -370,10 +370,10 @@ const Reports = () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1.5rem', borderBottom: '1px solid var(--glass-border)', paddingBottom: '1.25rem', marginBottom: '1.25rem' }}>
               <div>
                 <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--accent-primary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.25rem' }}>
-                  SWASTHYAEDGE Medical Telemetry Systems
+                  MediResQ Clinical Telemetry &amp; Management Systems
                 </div>
                 <h2 style={{ fontSize: '1.5rem', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
-                  Clinical Health & Vitals Trend Report
+                  Clinical Health &amp; Vitals Trend Report
                 </h2>
                 <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
                   Report Period: <strong style={{ color: 'var(--text-primary)' }}>{timeframe === '24h' ? 'Last 24 Hours' : timeframe === '3d' ? 'Last 3 Days' : 'Last 7 Days (Full Week)'}</strong>
@@ -391,7 +391,7 @@ const Reports = () => {
             </div>
 
             {/* Patient Demographics Bar */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem', background: 'rgba(0,0,0,0.15)', padding: '1rem', borderRadius: '10px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem', background: '#f8fafc', border: '1px solid var(--border-light)', padding: '1rem', borderRadius: '10px' }}>
               <div>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Patient Name</div>
                 <div style={{ fontWeight: 700, fontSize: '1.05rem', color: 'var(--text-primary)' }}>{selectedPatient.name}</div>
@@ -698,7 +698,7 @@ const Reports = () => {
                 </tr>
               ) : (
                 filteredPatients.map(p => (
-                  <tr key={p.id} style={{ background: selectedPatient?.id === p.id ? 'rgba(0,210,255,0.06)' : 'transparent' }}>
+                  <tr key={p.id} style={{ background: selectedPatient?.id === p.id ? 'var(--info-bg)' : 'transparent' }}>
                     <td><code>PT-00{p.id}</code></td>
                     <td style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{p.name}</td>
                     <td>Room {p.room_number || 'N/A'}</td>

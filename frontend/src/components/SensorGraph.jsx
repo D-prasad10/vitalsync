@@ -57,7 +57,7 @@ const SensorGraph = ({
   title,
   dataPoints = [],
   dataKey,
-  color = '#00d2ff',
+  color = '#2563eb',
   yMin,
   yMax,
   unit = '',
@@ -163,10 +163,10 @@ const SensorGraph = ({
         min: yMin,
         max: yMax,
         grid: {
-          color: 'rgba(255, 255, 255, 0.06)'
+          color: 'rgba(226, 232, 240, 0.8)'
         },
         ticks: {
-          color: 'rgba(148, 163, 184, 0.85)',
+          color: '#64748b',
           font: { size: 11, family: 'Inter, sans-serif' },
           padding: 6
         }
@@ -174,7 +174,7 @@ const SensorGraph = ({
       x: {
         grid: { display: false },
         ticks: {
-          color: 'rgba(148, 163, 184, 0.85)',
+          color: '#64748b',
           font: { size: 10, family: 'Inter, sans-serif' },
           maxTicksLimit: maxTicksLimit || (dateFormat === 'datetime' ? 8 : 6),
           autoSkip: true,
@@ -189,7 +189,7 @@ const SensorGraph = ({
         position: 'top',
         align: 'end',
         labels: {
-          color: '#cbd5e1',
+          color: '#334155',
           font: { size: 11, family: 'Inter, sans-serif' },
           boxWidth: 12,
           padding: 8
@@ -200,10 +200,10 @@ const SensorGraph = ({
         mode: 'index',
         intersect: false,
         animation: false,
-        backgroundColor: 'rgba(11, 13, 20, 0.95)',
+        backgroundColor: '#0f172a',
         titleColor: '#ffffff',
         bodyColor: '#cbd5e1',
-        borderColor: 'rgba(255, 255, 255, 0.15)',
+        borderColor: '#334155',
         borderWidth: 1,
         padding: 10,
         callbacks: {
@@ -239,14 +239,14 @@ const SensorGraph = ({
       </div>
 
       {/* Chart Body Container */}
-      <div className="chart-body-container" style={{ width: '100%', height, position: 'relative' }}>
+      <div className="chart-body-container" style={{ width: '100%', height, position: 'relative' }} role="region" aria-label={`${title} telemetry graph`}>
         {loading ? (
-          <div className="empty-state" style={{ height: '100%', padding: 0 }}>
+          <div className="empty-state" style={{ height: '100%', padding: 0 }} role="status" aria-label={`Updating ${title} sensor stream`}>
             <div className="loading-spinner" />
             <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Updating sensor stream...</span>
           </div>
         ) : !hasData ? (
-          <div className="empty-state" style={{ height: '100%', padding: '1rem', border: '1px dashed var(--glass-border)', borderRadius: '8px' }}>
+          <div className="empty-state" style={{ height: '100%', padding: '1rem', border: '1px dashed var(--glass-border)', borderRadius: '8px' }} role="status" aria-label={`No ${title} telemetry data available`}>
             <Activity size={24} style={{ color: 'var(--text-muted)' }} />
             <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 500 }}>No Telemetry Data Available</span>
             <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Waiting for live device stream...</span>

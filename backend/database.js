@@ -121,22 +121,29 @@ const db = new sqlite3.Database(dbPath, (err) => {
         db.run(`ALTER TABLE devices ADD COLUMN ip TEXT`, () => {});
       });
 
-      // Alerts Table (tracks hardware/environmental safety alerts)
+      // Alerts Table (tracks hardware, environmental, emergency, and clinical safety alerts)
       db.run(`
         CREATE TABLE IF NOT EXISTS alerts (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          id TEXT PRIMARY KEY,
           patient_id INTEGER,
-          device_id TEXT,
-          severity TEXT NOT NULL,
-          type TEXT NOT NULL,
-          message TEXT NOT NULL,
+          patient_name TEXT,
+          device_id TEXT DEFAULT NULL,
+          severity TEXT NOT NULL DEFAULT 'warning',
+          type TEXT DEFAULT 'general_alert',
+          message TEXT,
+          alerts TEXT,
           acknowledged INTEGER DEFAULT 0,
-          timestamp INTEGER NOT NULL,
+          timestamp INTEGER,
+          status TEXT DEFAULT 'active',
           FOREIGN KEY (patient_id) REFERENCES patients(id)
         )
       `, () => {
+        db.run(`ALTER TABLE alerts ADD COLUMN device_id TEXT`, () => {});
+        db.run(`ALTER TABLE alerts ADD COLUMN type TEXT DEFAULT 'general_alert'`, () => {});
         db.run(`ALTER TABLE alerts ADD COLUMN acknowledged INTEGER DEFAULT 0`, () => {});
-        db.run(`ALTER TABLE alerts ADD COLUMN type TEXT`, () => {});
+        db.run(`ALTER TABLE alerts ADD COLUMN patient_name TEXT`, () => {});
+        db.run(`ALTER TABLE alerts ADD COLUMN alerts TEXT`, () => {});
+        db.run(`ALTER TABLE alerts ADD COLUMN status TEXT DEFAULT 'active'`, () => {});
       });
 
       // AI Predictions Table (tracks risk evaluations received from AI Engine)
@@ -175,6 +182,56 @@ const db = new sqlite3.Database(dbPath, (err) => {
         });
       });
 
+
+      // Ambulances Table (emergency responder tracking)
+      db.run(`
+        CREATE TABLE IF NOT EXISTS ambulances (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'AVAILABLE',
+          latitude REAL,
+          longitude REAL,
+          assigned_patient_id INTEGER DEFAULT NULL,
+          assigned_emergency_id TEXT DEFAULT NULL,
+          is_simulated INTEGER DEFAULT 1,
+          updated_at INTEGER
+        )
+      `, () => {
+        db.get('SELECT id FROM ambulances LIMIT 1', (err, row) => {
+          if (!row) {
+            const now = Date.now();
+            db.run(`INSERT INTO ambulances (id, name, status, latitude, longitude, is_simulated, updated_at) VALUES ('AMB-001', 'Critical Care Unit 1', 'AVAILABLE', 20.3002, 85.8150, 1, ?)`, [now]);
+            db.run(`INSERT INTO ambulances (id, name, status, latitude, longitude, is_simulated, updated_at) VALUES ('AMB-002', 'Advanced Life Support 2', 'AVAILABLE', 20.2850, 85.8350, 1, ?)`, [now]);
+            db.run(`INSERT INTO ambulances (id, name, status, latitude, longitude, is_simulated, updated_at) VALUES ('AMB-003', 'Rapid Response Unit 3', 'AVAILABLE', 20.3120, 85.8200, 1, ?)`, [now]);
+            console.log('Ambulance fleet seeded.');
+          }
+        });
+      });
+
+      // Emergencies Table (GPS emergency response lifecycle)
+      db.run(`
+        CREATE TABLE IF NOT EXISTS emergencies (
+          id TEXT PRIMARY KEY,
+          patient_id INTEGER,
+          patient_name TEXT,
+          emergency_type TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'CREATED',
+          latitude REAL,
+          longitude REAL,
+          gps_fix INTEGER DEFAULT 0,
+          gps_sat INTEGER DEFAULT 0,
+          ambulance_id TEXT DEFAULT NULL,
+          initial_distance REAL DEFAULT 0,
+          current_distance REAL DEFAULT 0,
+          estimated_eta_minutes REAL DEFAULT 0,
+          progress REAL DEFAULT 0,
+          notes TEXT,
+          created_at INTEGER,
+          updated_at INTEGER,
+          FOREIGN KEY (patient_id) REFERENCES patients(id)
+        )
+      `);
+
       // Seed Patient Data (if empty)
       db.get('SELECT id FROM patients LIMIT 1', (err, row) => {
         if (!row) {
@@ -187,7 +244,13 @@ const db = new sqlite3.Database(dbPath, (err) => {
             if (resolveDbReady) resolveDbReady();
           });
         } else {
-          if (resolveDbReady) resolveDbReady();
+          // Ensure every patient has a threshold record
+          db.run(`
+            INSERT OR IGNORE INTO thresholds (patient_id)
+            SELECT id FROM patients WHERE id NOT IN (SELECT patient_id FROM thresholds)
+          `, () => {
+            if (resolveDbReady) resolveDbReady();
+          });
         }
       });
     });

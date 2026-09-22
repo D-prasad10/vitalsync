@@ -2,31 +2,17 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   HeartPulse, Stethoscope, Activity, ArrowRight,
-  Phone, Mail, Shield, CheckCircle, Loader, ArrowLeft,
-  User
+  Phone, Mail, CheckCircle2, Loader, ArrowLeft,
+  User, ShieldCheck, AlertCircle
 } from 'lucide-react';
+import { roleHome } from '../utils/auth';
 
 const API = 'http://localhost:5001';
 
-const inputStyle = {
-  width: '100%',
-  padding: '0.85rem 1rem',
-  background: 'rgba(0,0,0,0.3)',
-  border: '1px solid var(--glass-border)',
-  borderRadius: '10px',
-  color: 'var(--text-primary)',
-  outline: 'none',
-  fontSize: '1rem',
-  transition: 'border-color 0.2s',
-  boxSizing: 'border-box'
-};
-
-const errorStyle = { color: 'var(--danger)', fontSize: '0.8rem', marginTop: '0.3rem' };
-
 const Login = ({ onLogin }) => {
   const navigate = useNavigate();
-  // Step 1: unified credentials + role, Step 2: otp
-  const [step, setStep] = useState(1); 
+  // Step 1: credentials + role, Step 2: otp
+  const [step, setStep] = useState(1);
   const [role, setRole] = useState('caretaker');
   const [form, setForm] = useState({ phone: '', email: '' });
   const [otp, setOtp] = useState('');
@@ -36,8 +22,6 @@ const Login = ({ onLogin }) => {
   const [otpError, setOtpError] = useState('');
   const [serverError, setServerError] = useState('');
 
-  const accentColor = role === 'caretaker' ? 'var(--success)' : role === 'doctor' ? 'var(--accent-primary)' : 'var(--accent-secondary)';
-
   const validateCredentials = () => {
     const e = {};
     if (!form.phone.trim()) {
@@ -46,20 +30,24 @@ const Login = ({ onLogin }) => {
       e.phone = 'Enter a valid 10-digit mobile number';
     }
     if (!form.email.trim()) {
-      e.email = 'Email is required';
+      e.email = 'Email address is required';
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
       e.email = 'Enter a valid email address';
     }
     return e;
   };
 
-  const handleSendOtp = async () => {
-    console.log('[AUTH] Send OTP requested. Selected role:', role, 'Mobile:', form.phone, 'Email:', form.email);
-    const e = validateCredentials();
-    if (Object.keys(e).length) { setErrors(e); return; }
+  const handleSendOtp = async (e) => {
+    if (e) e.preventDefault();
+    const eMap = validateCredentials();
+    if (Object.keys(eMap).length) {
+      setErrors(eMap);
+      return;
+    }
     setErrors({});
     setServerError('');
     setSending(true);
+
     try {
       const res = await fetch(`${API}/api/auth/send-otp`, {
         method: 'POST',
@@ -71,30 +59,29 @@ const Login = ({ onLogin }) => {
         })
       });
       const data = await res.json();
-      console.log('[AUTH] Send OTP response received:', data);
       if (!res.ok) {
-        setServerError(data.error || 'Failed to send OTP.');
+        setServerError(data.error || 'Failed to send verification code.');
       } else {
         setStep(2);
-        // Dev mode: auto-fill OTP when email is not configured
+        // Development mode: auto-fill OTP when email delivery is not configured
         if (data.devOtp) {
           setOtp(data.devOtp);
-          setServerError('⚠️ Dev mode: Email not configured. OTP auto-filled below.');
+          setServerError('Notice: Development mode active — OTP code auto-filled.');
         }
       }
-    } catch (err) {
-      console.error('[AUTH] Send OTP network error:', err);
-      setServerError('Cannot connect to server. Make sure the backend is running.');
+    } catch {
+      setServerError('Unable to reach authentication service. Please ensure the backend is active.');
     } finally {
       setSending(false);
     }
   };
 
-  const handleVerifyOtp = async () => {
+  const handleVerifyOtp = async (e) => {
+    if (e) e.preventDefault();
     if (otp.trim().length !== 6) return;
     setOtpError('');
     setVerifying(true);
-    console.log('[AUTH] Verify OTP started for mobile:', form.phone.trim(), 'OTP:', otp.trim());
+
     try {
       const res = await fetch(`${API}/api/auth/verify-otp`, {
         method: 'POST',
@@ -102,9 +89,8 @@ const Login = ({ onLogin }) => {
         body: JSON.stringify({ mobile: form.phone.trim(), otp: otp.trim() })
       });
       const data = await res.json();
-      console.log('[AUTH] Verify OTP API response:', data);
       if (!res.ok) {
-        setOtpError(data.error || 'Verification failed.');
+        setOtpError(data.error || 'Invalid verification code.');
         setVerifying(false);
       } else {
         const rawRole = (data.user && data.user.role) || role || 'staff';
@@ -113,37 +99,23 @@ const Login = ({ onLogin }) => {
           role: userRole,
           name: (data.user && data.user.name) || form.email.split('@')[0],
           staffId: (data.user && data.user.staffId) || (data.user && data.user.id) || '',
-          id: (data.user && data.user.id) || ''
+          id: (data.user && data.user.id) || '',
+          token: data.token || ''
         };
 
-        // Determine destination route based on role
-        let targetRoute = '/patient-dashboard';
-        if (userRole === 'doctor') {
-          targetRoute = '/doctor';
-        } else if (userRole === 'caretaker') {
-          targetRoute = '/caretaker';
-        } else if (userRole === 'staff') {
-          targetRoute = '/staff';
-        } else if (userRole === 'patient') {
-          targetRoute = '/patient-dashboard';
-        }
+        const targetRoute = roleHome(userData);
 
-        console.log('[AUTH] Detected role:', userRole, '| Target route:', targetRoute, '| User data:', userData);
-
-        // Synchronously commit to localStorage FIRST so any route guards immediately see it
+        // Commit to localStorage
         localStorage.setItem('vitals_user', JSON.stringify(userData));
-        console.log('[AUTH] Stored user in localStorage: vitals_user =', localStorage.getItem('vitals_user'));
 
-        // Update React state via callback
+        // Update App state
         onLogin(userData);
 
-        // Immediate navigation to dashboard
-        console.log('[AUTH] Navigating immediately to target route:', targetRoute);
+        // Immediate redirection
         navigate(targetRoute, { replace: true });
       }
-    } catch (err) {
-      console.error('[AUTH] Verify OTP network exception:', err);
-      setOtpError('Cannot connect to server.');
+    } catch {
+      setOtpError('Unable to connect to verification service.');
       setVerifying(false);
     }
   };
@@ -157,195 +129,428 @@ const Login = ({ onLogin }) => {
       const res = await fetch(`${API}/api/auth/send-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mobile: form.phone.trim(), email: form.email.trim().toLowerCase(), role })
+        body: JSON.stringify({
+          mobile: form.phone.trim(),
+          email: form.email.trim().toLowerCase(),
+          role
+        })
       });
       const data = await res.json();
-      if (!res.ok) setServerError(data.error || 'Failed to resend OTP.');
+      if (!res.ok) {
+        setServerError(data.error || 'Failed to resend verification code.');
+      } else if (data.devOtp) {
+        setOtp(data.devOtp);
+        setServerError('Notice: Development mode active — OTP code auto-filled.');
+      }
     } catch {
-      setServerError('Cannot connect to server.');
+      setServerError('Unable to reconnect to authentication service.');
     } finally {
       setSending(false);
     }
   };
 
   return (
-    <div style={{
-      minHeight: '100vh', width: '100%', display: 'flex',
-      alignItems: 'center', justifyContent: 'center',
-      background: 'radial-gradient(circle at top left, #1a1d29, #0f111a)',
-      padding: '2rem'
-    }}>
-
-      {/* Decorative blobs */}
-      <div style={{ position: 'fixed', top: '-10%', left: '-10%', width: '400px', height: '400px', background: 'var(--accent-secondary)', filter: 'blur(120px)', opacity: 0.08, zIndex: 0 }} />
-      <div style={{ position: 'fixed', bottom: '-10%', right: '-10%', width: '400px', height: '400px', background: 'var(--success)', filter: 'blur(120px)', opacity: 0.06, zIndex: 0 }} />
-
-      <div style={{ width: '100%', maxWidth: '480px', zIndex: 1 }}>
-
-        {/* Logo */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', color: 'var(--accent-primary)', marginBottom: '2rem', justifyContent: 'center' }}>
-          <HeartPulse size={36} />
-          <span style={{ fontSize: '1.75rem', fontWeight: 800, letterSpacing: '-0.5px' }}>SWASTHYAEDGE</span>
+    <div
+      style={{
+        minHeight: '100vh',
+        width: '100%',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#f8fafc',
+        backgroundImage: 'radial-gradient(at 10% 20%, #eff6ff 0px, transparent 50%), radial-gradient(at 90% 80%, #f0fdfa 0px, transparent 50%)',
+        padding: '1.5rem'
+      }}
+    >
+      <div style={{ width: '100%', maxWidth: '460px', zIndex: 1 }}>
+        {/* Brand Header */}
+        <div style={{ textAlign: 'center', marginBottom: '1.75rem' }}>
+          <div
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '54px',
+              height: '54px',
+              borderRadius: '14px',
+              background: 'linear-gradient(135deg, #2563eb, #0d9488)',
+              color: '#ffffff',
+              boxShadow: '0 4px 12px rgba(37, 99, 235, 0.25)',
+              marginBottom: '0.75rem'
+            }}
+          >
+            <HeartPulse size={30} />
+          </div>
+          <h1
+            style={{
+              fontSize: '1.75rem',
+              fontWeight: 800,
+              color: '#0f172a',
+              letterSpacing: '-0.025em',
+              margin: '0 0 0.25rem 0'
+            }}
+          >
+            MediResQ
+          </h1>
+          <p
+            style={{
+              fontSize: '0.85rem',
+              fontWeight: 500,
+              color: '#0d9488',
+              letterSpacing: '0.02em',
+              margin: 0
+            }}
+          >
+            Healthcare Monitoring & Clinical Management
+          </p>
         </div>
 
-        {/* STEP 1: Credentials & Role */}
+        {/* STEP 1: Role & Credentials Form */}
         {step === 1 && (
-          <div className="glass-panel fade-in" style={{ padding: '2.5rem' }}>
-            <h2 style={{ fontSize: '1.4rem', fontWeight: 700, marginBottom: '0.5rem' }}>Welcome to SWASTHYAEDGE</h2>
-            <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem', fontSize: '0.9rem' }}>
-              Enter your details to receive an OTP and access the dashboard.
-            </p>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-              {/* Role Selection */}
-              <div>
-                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, marginBottom: '0.4rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Login As</label>
-                <div style={{ position: 'relative' }}>
-                  <User size={16} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
-                  <select
-                    style={{ ...inputStyle, paddingLeft: '2.75rem', appearance: 'none', cursor: 'pointer' }}
-                    value={role}
-                    onChange={e => setRole(e.target.value)}
-                  >
-                    <option value="caretaker">Caretaker</option>
-                    <option value="doctor">Doctor</option>
-                    <option value="patient">Patient</option>
-                    <option value="staff">Staff</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Mobile */}
-              <div>
-                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, marginBottom: '0.4rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Mobile Number</label>
-                <div style={{ position: 'relative' }}>
-                  <Phone size={16} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
-                  <input
-                    style={{ ...inputStyle, paddingLeft: '2.75rem', borderColor: errors.phone ? 'var(--danger)' : 'var(--glass-border)' }}
-                    placeholder="10-digit mobile number"
-                    value={form.phone}
-                    maxLength={10}
-                    onChange={e => setForm(f => ({ ...f, phone: e.target.value.replace(/\D/g, '') }))}
-                    onFocus={e => e.target.style.borderColor = accentColor}
-                    onBlur={e => e.target.style.borderColor = errors.phone ? 'var(--danger)' : 'var(--glass-border)'}
-                    onKeyDown={e => { if (e.key === 'Enter') handleSendOtp(); }}
-                  />
-                </div>
-                {errors.phone && <p style={errorStyle}>{errors.phone}</p>}
-              </div>
-
-              {/* Email */}
-              <div>
-                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, marginBottom: '0.4rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Email Address</label>
-                <div style={{ position: 'relative' }}>
-                  <Mail size={16} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
-                  <input
-                    type="email"
-                    style={{ ...inputStyle, paddingLeft: '2.75rem', borderColor: errors.email ? 'var(--danger)' : 'var(--glass-border)' }}
-                    placeholder="your@email.com"
-                    value={form.email}
-                    onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-                    onFocus={e => e.target.style.borderColor = accentColor}
-                    onBlur={e => e.target.style.borderColor = errors.email ? 'var(--danger)' : 'var(--glass-border)'}
-                    onKeyDown={e => { if (e.key === 'Enter') handleSendOtp(); }}
-                  />
-                </div>
-                {errors.email && <p style={errorStyle}>{errors.email}</p>}
-              </div>
-
-              {serverError && (
-                <div style={{ padding: '0.75rem 1rem', background: 'rgba(255,77,79,0.1)', border: '1px solid rgba(255,77,79,0.25)', borderRadius: '8px', fontSize: '0.85rem', color: 'var(--danger)' }}>
-                  {serverError}
-                </div>
-              )}
-
-              <button
-                className="btn-primary"
-                onClick={handleSendOtp}
-                disabled={sending}
-                style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', opacity: sending ? 0.7 : 1 }}
-              >
-                {sending ? <><Loader size={18} style={{ animation: 'spin 1s linear infinite' }} /> Sending OTP...</> : 'Send Verification Code'}
-              </button>
+          <div
+            className="fade-in"
+            style={{
+              background: '#ffffff',
+              border: '1px solid #e2e8f0',
+              borderRadius: '16px',
+              padding: '2rem 2.25rem',
+              boxShadow: '0 4px 20px -2px rgba(15, 23, 42, 0.08)'
+            }}
+          >
+            <div style={{ marginBottom: '1.5rem' }}>
+              <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0f172a', margin: '0 0 0.35rem 0' }}>
+                Clinical Portal Sign In
+              </h2>
+              <p style={{ color: '#64748b', fontSize: '0.875rem', margin: 0 }}>
+                Select your role and provide your authorized credentials.
+              </p>
             </div>
-          </div>
-        )}
 
-        {/* STEP 2: OTP */}
-        {step === 2 && (
-          <div className="glass-panel fade-in" style={{ padding: '2.5rem' }}>
-            <button onClick={() => { setStep(1); setOtp(''); setOtpError(''); setServerError(''); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.5rem', fontSize: '0.9rem', padding: 0 }}>
-              <ArrowLeft size={16} /> Back
-            </button>
-
-            {verifying ? (
-              <div style={{ textAlign: 'center', padding: '2rem 0' }}>
-                <CheckCircle size={64} style={{ color: 'var(--success)', marginBottom: '1rem' }} />
-                <h2 style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--success)' }}>Verified!</h2>
-                <p style={{ color: 'var(--text-secondary)' }}>Opening your dashboard...</p>
+            {serverError && (
+              <div
+                role="alert"
+                style={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '0.6rem',
+                  padding: '0.75rem 0.95rem',
+                  borderRadius: '8px',
+                  background: '#fef2f2',
+                  border: '1px solid #fecaca',
+                  color: '#991b1b',
+                  fontSize: '0.82rem',
+                  marginBottom: '1.25rem',
+                  lineHeight: 1.4
+                }}
+              >
+                <AlertCircle size={16} style={{ flexShrink: 0, marginTop: '2px' }} />
+                <span>{serverError}</span>
               </div>
-            ) : (
-              <>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
-                  <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'rgba(0,210,255,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent-primary)' }}>
-                    <Shield size={22} />
+            )}
+
+            <form onSubmit={handleSendOtp} noValidate>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.15rem' }}>
+                {/* Role Selector */}
+                <div>
+                  <label
+                    htmlFor="role-select"
+                    style={{
+                      display: 'block',
+                      fontSize: '0.75rem',
+                      fontWeight: 700,
+                      color: '#475569',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.05em',
+                      marginBottom: '0.4rem'
+                    }}
+                  >
+                    Clinical Role
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <div style={{ position: 'absolute', left: '0.9rem', top: '50%', transform: 'translateY(-50%)', color: '#64748b', display: 'flex', alignItems: 'center', pointerEvents: 'none' }}>
+                      {role === 'doctor' ? <Stethoscope size={16} /> : role === 'caretaker' ? <Activity size={16} /> : role === 'staff' ? <ShieldCheck size={16} /> : <User size={16} />}
+                    </div>
+                    <select
+                      id="role-select"
+                      className="glass-select"
+                      style={{ paddingLeft: '2.5rem', cursor: 'pointer' }}
+                      value={role}
+                      onChange={(e) => setRole(e.target.value)}
+                    >
+                      <option value="doctor">Doctor — Clinical Lead</option>
+                      <option value="caretaker">Caretaker — Patient Care</option>
+                      <option value="staff">Staff — Hospital Administration</option>
+                    </select>
                   </div>
-                  <h2 style={{ fontSize: '1.3rem', fontWeight: 700 }}>Enter OTP</h2>
                 </div>
-                <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', marginBottom: '0.5rem' }}>
-                  A 6-digit code was sent to
-                </p>
-                <p style={{ color: 'var(--text-primary)', fontWeight: 600, marginBottom: '2rem', fontSize: '0.95rem' }}>
-                  {form.phone} & {form.email}
-                </p>
 
-                {serverError && (
-                  <div style={{ padding: '0.75rem 1rem', background: 'rgba(255,255,0,0.1)', border: '1px solid rgba(255,255,0,0.25)', borderRadius: '8px', fontSize: '0.85rem', color: 'var(--accent-primary)', marginBottom: '1rem' }}>
-                    {serverError}
+                {/* Mobile Number */}
+                <div>
+                  <label
+                    htmlFor="mobile-input"
+                    style={{
+                      display: 'block',
+                      fontSize: '0.75rem',
+                      fontWeight: 700,
+                      color: '#475569',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.05em',
+                      marginBottom: '0.4rem'
+                    }}
+                  >
+                    Registered Mobile Number
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <div style={{ position: 'absolute', left: '0.9rem', top: '50%', transform: 'translateY(-50%)', color: '#64748b', display: 'flex', alignItems: 'center', pointerEvents: 'none' }}>
+                      <Phone size={16} />
+                    </div>
+                    <input
+                      id="mobile-input"
+                      type="tel"
+                      className="glass-input"
+                      style={{
+                        paddingLeft: '2.5rem',
+                        borderColor: errors.phone ? '#dc2626' : undefined
+                      }}
+                      placeholder="10-digit mobile number"
+                      value={form.phone}
+                      maxLength={10}
+                      onChange={(e) => setForm(f => ({ ...f, phone: e.target.value.replace(/\D/g, '') }))}
+                      autoComplete="tel"
+                    />
                   </div>
-                )}
+                  {errors.phone && (
+                    <p style={{ color: '#dc2626', fontSize: '0.78rem', marginTop: '0.35rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                      <AlertCircle size={13} />
+                      {errors.phone}
+                    </p>
+                  )}
+                </div>
 
-                <input
-                  style={{ ...inputStyle, fontSize: '2rem', fontWeight: 700, letterSpacing: '1rem', textAlign: 'center', borderColor: otpError ? 'var(--danger)' : 'var(--glass-border)', marginBottom: '0.5rem' }}
-                  placeholder="------"
-                  maxLength={6}
-                  value={otp}
-                  onChange={e => { setOtp(e.target.value.replace(/\D/g, '')); setOtpError(''); }}
-                  onFocus={e => e.target.style.borderColor = accentColor}
-                  onBlur={e => e.target.style.borderColor = otpError ? 'var(--danger)' : 'var(--glass-border)'}
-                  onKeyDown={e => { if (e.key === 'Enter' && otp.trim().length === 6 && !verifying) handleVerifyOtp(); }}
-                />
-                {otpError && <p style={{ ...errorStyle, marginBottom: '1rem' }}>{otpError}</p>}
+                {/* Email Address */}
+                <div>
+                  <label
+                    htmlFor="email-input"
+                    style={{
+                      display: 'block',
+                      fontSize: '0.75rem',
+                      fontWeight: 700,
+                      color: '#475569',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.05em',
+                      marginBottom: '0.4rem'
+                    }}
+                  >
+                    Hospital / Official Email
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <div style={{ position: 'absolute', left: '0.9rem', top: '50%', transform: 'translateY(-50%)', color: '#64748b', display: 'flex', alignItems: 'center', pointerEvents: 'none' }}>
+                      <Mail size={16} />
+                    </div>
+                    <input
+                      id="email-input"
+                      type="email"
+                      className="glass-input"
+                      style={{
+                        paddingLeft: '2.5rem',
+                        borderColor: errors.email ? '#dc2626' : undefined
+                      }}
+                      placeholder="name@hospital.org"
+                      value={form.email}
+                      onChange={(e) => setForm(f => ({ ...f, email: e.target.value }))}
+                      autoComplete="email"
+                    />
+                  </div>
+                  {errors.email && (
+                    <p style={{ color: '#dc2626', fontSize: '0.78rem', marginTop: '0.35rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                      <AlertCircle size={13} />
+                      {errors.email}
+                    </p>
+                  )}
+                </div>
 
                 <button
+                  type="submit"
+                  disabled={sending}
                   className="btn-primary"
-                  onClick={handleVerifyOtp}
-                  disabled={otp.length !== 6 || verifying}
-                  style={{ width: '100%', marginTop: '1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', opacity: otp.length !== 6 || verifying ? 0.5 : 1 }}
+                  style={{ width: '100%', marginTop: '0.5rem' }}
                 >
-                  {verifying ? <><Loader size={18} style={{ animation: 'spin 1s linear infinite' }} /> Verifying...</> : <><Shield size={18} /> Verify & Enter Dashboard</>}
+                  {sending ? (
+                    <>
+                      <Loader size={18} style={{ animation: 'spin 0.8s linear infinite' }} />
+                      <span>Sending Security Code...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Send Authentication Code</span>
+                      <ArrowRight size={18} />
+                    </>
+                  )}
                 </button>
-
-                <div style={{ textAlign: 'center', marginTop: '1.5rem', fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-                  Didn't receive it?{' '}
-                  <button onClick={handleResend} disabled={sending} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-primary)', fontWeight: 600, fontSize: '0.875rem' }}>
-                    {sending ? 'Resending...' : 'Resend OTP'}
-                  </button>
-                </div>
-              </>
-            )}
+              </div>
+            </form>
           </div>
         )}
 
-        {/* Step indicators */}
-        <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem', marginTop: '1.5rem' }}>
-          {[1, 2].map(s => (
-            <div key={s} style={{ width: s === step ? '24px' : '8px', height: '8px', borderRadius: '99px', background: s === step ? 'var(--accent-primary)' : 'rgba(255,255,255,0.2)', transition: 'all 0.3s ease' }} />
-          ))}
-        </div>
-      </div>
+        {/* STEP 2: OTP Verification Form */}
+        {step === 2 && (
+          <div
+            className="fade-in"
+            style={{
+              background: '#ffffff',
+              border: '1px solid #e2e8f0',
+              borderRadius: '16px',
+              padding: '2rem 2.25rem',
+              boxShadow: '0 4px 20px -2px rgba(15, 23, 42, 0.08)'
+            }}
+          >
+            <div style={{ marginBottom: '1.5rem' }}>
+              <button
+                type="button"
+                onClick={() => { setStep(1); setOtp(''); setOtpError(''); setServerError(''); }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#64748b',
+                  fontSize: '0.8rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.35rem',
+                  cursor: 'pointer',
+                  padding: 0,
+                  marginBottom: '1rem'
+                }}
+              >
+                <ArrowLeft size={15} />
+                <span>Change Mobile or Email</span>
+              </button>
+              <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0f172a', margin: '0 0 0.35rem 0' }}>
+                Verify Security Code
+              </h2>
+              <p style={{ color: '#64748b', fontSize: '0.875rem', margin: 0 }}>
+                A 6-digit code has been dispatched to your registered credentials.
+              </p>
+            </div>
 
-      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+            {serverError && (
+              <div
+                role="alert"
+                style={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '0.6rem',
+                  padding: '0.75rem 0.95rem',
+                  borderRadius: '8px',
+                  background: '#fef3c7',
+                  border: '1px solid #fde68a',
+                  color: '#92400e',
+                  fontSize: '0.82rem',
+                  marginBottom: '1.25rem',
+                  lineHeight: 1.4
+                }}
+              >
+                <AlertCircle size={16} style={{ flexShrink: 0, marginTop: '2px' }} />
+                <span>{serverError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleVerifyOtp} noValidate>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                <div>
+                  <label
+                    htmlFor="otp-input"
+                    style={{
+                      display: 'block',
+                      fontSize: '0.75rem',
+                      fontWeight: 700,
+                      color: '#475569',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.05em',
+                      marginBottom: '0.4rem'
+                    }}
+                  >
+                    Enter 6-Digit Code
+                  </label>
+                  <input
+                    id="otp-input"
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    className="glass-input"
+                    style={{
+                      textAlign: 'center',
+                      fontSize: '1.5rem',
+                      fontWeight: 700,
+                      letterSpacing: '0.35em',
+                      borderColor: otpError ? '#dc2626' : undefined
+                    }}
+                    placeholder="••••••"
+                    maxLength={6}
+                    value={otp}
+                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
+                    autoFocus
+                  />
+                  {otpError && (
+                    <p style={{ color: '#dc2626', fontSize: '0.78rem', marginTop: '0.35rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                      <AlertCircle size={13} />
+                      {otpError}
+                    </p>
+                  )}
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={verifying || otp.trim().length !== 6}
+                  className="btn-primary"
+                  style={{ width: '100%' }}
+                >
+                  {verifying ? (
+                    <>
+                      <Loader size={18} style={{ animation: 'spin 0.8s linear infinite' }} />
+                      <span>Verifying Session...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 size={18} />
+                      <span>Verify & Open Dashboard</span>
+                    </>
+                  )}
+                </button>
+
+                <div style={{ textAlign: 'center', marginTop: '0.5rem' }}>
+                  <button
+                    type="button"
+                    onClick={handleResend}
+                    disabled={sending}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#2563eb',
+                      fontSize: '0.85rem',
+                      fontWeight: 600,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {sending ? 'Resending Code...' : 'Did not receive code? Resend OTP'}
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {/* Security / Compliance Footnote */}
+        <p
+          style={{
+            textAlign: 'center',
+            fontSize: '0.75rem',
+            color: '#94a3b8',
+            marginTop: '1.5rem'
+          }}
+        >
+          MediResQ Clinical Telemetry System • Secure TLS Encrypted Session
+        </p>
+      </div>
     </div>
   );
 };

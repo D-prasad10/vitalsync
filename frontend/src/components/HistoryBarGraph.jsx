@@ -26,7 +26,7 @@ const HistoryBarGraph = ({
   title,
   dataPoints = [],
   dataKey,
-  color = '#3a7bd5',
+  color = '#2563eb',
   yMin,
   yMax,
   unit = '',
@@ -100,9 +100,9 @@ const HistoryBarGraph = ({
       y: {
         min: yMin,
         max: yMax,
-        grid: { color: 'rgba(255, 255, 255, 0.06)' },
+        grid: { color: 'rgba(226, 232, 240, 0.8)' },
         ticks: {
-          color: 'rgba(148, 163, 184, 0.8)',
+          color: '#64748b',
           font: { size: 11, family: 'Inter, sans-serif' },
           padding: 6
         }
@@ -110,7 +110,7 @@ const HistoryBarGraph = ({
       x: {
         grid: { display: false },
         ticks: {
-          color: 'rgba(148, 163, 184, 0.8)',
+          color: '#64748b',
           font: { size: 10, family: 'Inter, sans-serif' },
           maxTicksLimit: 8,
           autoSkip: true,
@@ -124,10 +124,10 @@ const HistoryBarGraph = ({
       tooltip: {
         mode: 'index',
         intersect: false,
-        backgroundColor: 'rgba(11, 13, 20, 0.95)',
+        backgroundColor: '#0f172a',
         titleColor: '#ffffff',
         bodyColor: color,
-        borderColor: 'rgba(255, 255, 255, 0.12)',
+        borderColor: '#334155',
         borderWidth: 1,
         padding: 10,
         callbacks: {

@@ -25,7 +25,7 @@ const CircularProgress = ({ score }) => {
     <div style={{ position: 'relative', width: '120px', height: '120px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <svg height={radius * 2} width={radius * 2} style={{ transform: 'rotate(-90deg)' }}>
         <circle
-          stroke="rgba(255,255,255,0.1)"
+          stroke="var(--border-light, #e2e8f0)"
           fill="transparent"
           strokeWidth={stroke}
           r={normalizedRadius}
@@ -46,7 +46,7 @@ const CircularProgress = ({ score }) => {
       </svg>
       <div style={{ position: 'absolute', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
         <span style={{ fontSize: '2rem', fontWeight: 800, color, lineHeight: 1 }}>{score}</span>
-        <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Score</span>
+        <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 600 }}>Score</span>
       </div>
     </div>
   );
@@ -161,12 +161,12 @@ const HealthScorePanel = ({ currentData, historyData }) => {
         {
           label: 'Avg Daily Score',
           data,
-          borderColor: 'rgba(32, 201, 151, 0.9)',
-          backgroundColor: 'rgba(32, 201, 151, 0.15)',
-          borderWidth: 3,
-          pointRadius: 5,
-          pointBackgroundColor: 'rgba(32, 201, 151, 1)',
-          pointBorderColor: '#fff',
+          borderColor: '#0d9488',
+          backgroundColor: 'rgba(13, 148, 136, 0.12)',
+          borderWidth: 2.5,
+          pointRadius: 4,
+          pointBackgroundColor: '#0d9488',
+          pointBorderColor: '#ffffff',
           pointBorderWidth: 2,
           fill: true,
           tension: 0.3
@@ -184,18 +184,18 @@ const HealthScorePanel = ({ currentData, historyData }) => {
       title: {
         display: true,
         text: 'Previous Score Trend of 7 Days',
-        color: 'rgba(255, 255, 255, 0.9)',
-        font: { size: 16, weight: 'bold' },
-        padding: { bottom: 20 }
+        color: '#0f172a',
+        font: { size: 15, weight: '700' },
+        padding: { bottom: 16 }
       },
       tooltip: {
         mode: 'index',
         intersect: false,
         animation: false,
         padding: 10,
-        backgroundColor: 'rgba(0,0,0,0.8)',
-        titleFont: { size: 14 },
-        bodyFont: { size: 14, weight: 'bold' },
+        backgroundColor: 'rgba(15, 23, 42, 0.95)',
+        titleFont: { size: 13, weight: '600' },
+        bodyFont: { size: 13, weight: '700' },
         callbacks: {
            label: (context) => `Avg Score: ${context.parsed.y}`
         }
@@ -207,117 +207,121 @@ const HealthScorePanel = ({ currentData, historyData }) => {
         title: {
           display: true,
           text: 'Days',
-          color: 'var(--text-secondary)',
-          font: { size: 12, weight: 'bold' },
-          padding: { top: 10 }
+          color: '#64748b',
+          font: { size: 12, weight: '600' },
+          padding: { top: 8 }
         },
         grid: { display: false },
-        ticks: { color: 'var(--text-secondary)', maxRotation: 0, font: { size: 11 } }
+        ticks: { color: '#64748b', maxRotation: 0, font: { size: 11 } }
       },
       y: {
         display: true,
         title: {
           display: true,
           text: 'Health Score',
-          color: 'var(--text-secondary)',
-          font: { size: 12, weight: 'bold' },
-          padding: { bottom: 10 }
+          color: '#64748b',
+          font: { size: 12, weight: '600' },
+          padding: { bottom: 8 }
         },
         min: 0,
         max: 100,
         border: { display: false },
-        grid: { color: 'rgba(255,255,255,0.05)', drawBorder: false },
-        ticks: { color: 'var(--text-secondary)', stepSize: 20, padding: 10 }
+        grid: { color: 'rgba(226, 232, 240, 0.8)', drawBorder: false },
+        ticks: { color: '#64748b', stepSize: 20, padding: 8 }
       }
     }
   }), []);
 
   return (
-    <div className="glass-panel" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.5rem', background: 'linear-gradient(145deg, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.1) 100%)' }}>
-      
-      {/* Header & Score Section */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '2rem', alignItems: 'center' }}>
-        <CircularProgress score={score} />
-        <div>
-          <h2 style={{ margin: '0 0 0.5rem 0', fontSize: '1.5rem', color: 'var(--text-primary)' }}>
-            Overall Health: <span style={{ color: score < 50 ? '#ff4d4f' : score < 80 ? '#ffc107' : 'var(--success)' }}>{scoreStatus}</span>
-          </h2>
-          <div style={{ background: 'rgba(255,255,255,0.05)', padding: '0.75rem', borderRadius: '8px', borderLeft: `3px solid ${score < 50 ? '#ff4d4f' : score < 80 ? '#ffc107' : 'var(--success)'}` }}>
-            <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
-              <strong>Tip:</strong> {tip}
-            </p>
+    <div className="glass-panel health-score-panel-card" style={{ padding: '1.25rem 1.5rem', background: '#ffffff', border: '1px solid var(--border-light)', borderRadius: '12px', boxShadow: 'var(--shadow-sm)' }}>
+      <div className="health-score-grid">
+        {/* Left Column: Overall Health Score & Vitals Breakdown */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.15rem' }}>
+          {/* Score & Tip Row */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
+            <CircularProgress score={score} />
+            <div style={{ flex: 1 }}>
+              <h2 style={{ margin: '0 0 0.35rem 0', fontSize: '1.25rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                Overall Health: <span style={{ color: score < 50 ? '#ef4444' : score < 80 ? '#f59e0b' : '#10b981' }}>{scoreStatus}</span>
+              </h2>
+              <div style={{ background: '#f8fafc', padding: '0.65rem 0.85rem', borderRadius: '8px', border: '1px solid var(--border-light)', borderLeft: `4px solid ${score < 50 ? '#ef4444' : score < 80 ? '#f59e0b' : '#10b981'}` }}>
+                <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                  <strong style={{ color: 'var(--text-primary)' }}>Tip:</strong> {tip}
+                </p>
+              </div>
+            </div>
           </div>
+
+          {/* Vitals Status Table */}
+          <div>
+            <h3 style={{ fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.5rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Vitals Status Breakdown</h3>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--border-light)', color: 'var(--text-secondary)', textAlign: 'left' }}>
+                  <th style={{ padding: '0.45rem 0', fontWeight: 600 }}>Vital Sign</th>
+                  <th style={{ padding: '0.45rem 0', textAlign: 'right', fontWeight: 600 }}>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr style={{ borderBottom: '1px solid var(--border-light)' }}>
+                  <td style={{ padding: '0.45rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-primary)', fontWeight: 500 }}>
+                    <HeartPulse size={15} color="#ef4444" /> Heart Rate
+                  </td>
+                  <td style={{ padding: '0.45rem 0', textAlign: 'right', color: hrStatus.color, fontWeight: 600 }}>{hrStatus.text}</td>
+                </tr>
+                <tr style={{ borderBottom: '1px solid var(--border-light)' }}>
+                  <td style={{ padding: '0.45rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-primary)', fontWeight: 500 }}>
+                    <Activity size={15} color="#f59e0b" /> Blood Pressure
+                  </td>
+                  <td style={{ padding: '0.45rem 0', textAlign: 'right', color: bpStatus.color, fontWeight: 600 }}>{bpStatus.text}</td>
+                </tr>
+                <tr style={{ borderBottom: '1px solid var(--border-light)' }}>
+                  <td style={{ padding: '0.45rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-primary)', fontWeight: 500 }}>
+                    <Thermometer size={15} color="#0d9488" /> Temperature
+                  </td>
+                  <td style={{ padding: '0.45rem 0', textAlign: 'right', color: tempStatus.color, fontWeight: 600 }}>{tempStatus.text}</td>
+                </tr>
+                <tr>
+                  <td style={{ padding: '0.45rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-primary)', fontWeight: 500 }}>
+                    <Wind size={15} color="#2563eb" /> Oxygen Level (SpO2)
+                  </td>
+                  <td style={{ padding: '0.45rem 0', textAlign: 'right', color: spo2Status.color, fontWeight: 600 }}>{spo2Status.text}</td>
+                </tr>
+                <tr>
+                  <td style={{ padding: '0.45rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-primary)', fontWeight: 500 }}>
+                    <Cpu size={15} color="var(--accent-primary)" /> AI Anomaly Risk
+                  </td>
+                  <td style={{ padding: '0.45rem 0', textAlign: 'right' }}>
+                    <AiRiskBadge ai={latestData.ai} telemetryPoint={latestData} />
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Right Column: 7-Day History Chart */}
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: '260px' }}>
+          {chartData && chartData.labels.length > 0 ? (
+            <div style={{ flex: 1, width: '100%', minHeight: '260px', background: '#f8fafc', padding: '0.85rem', borderRadius: '8px', border: '1px solid var(--border-light)' }}>
+              <Line data={chartData} options={chartOptions} redraw={false} />
+            </div>
+          ) : (
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '1.5rem', textAlign: 'center', background: '#f8fafc', borderRadius: '8px', border: '1px solid var(--border-light)', color: 'var(--text-secondary)' }}>
+              <h4 style={{ fontSize: '0.9rem', marginBottom: '0.25rem', color: 'var(--text-primary)', fontWeight: 600 }}>Previous Score Trend of 7 Days</h4>
+              <span style={{ fontSize: '0.8rem' }}>Gathering 7-day health score data...</span>
+            </div>
+          )}
         </div>
       </div>
 
       {/* AI Telemetry Risk Engine Card */}
-      <AiRiskCard ai={latestData.ai} telemetryPoint={latestData} />
-
-      {/* Vitals Status Table */}
-      <div>
-        <h3 style={{ fontSize: '1.1rem', marginBottom: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px' }}>Vitals Status breakdown</h3>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
-          <thead>
-            <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-secondary)', textAlign: 'left' }}>
-              <th style={{ padding: '0.75rem 0' }}>Vital Sign</th>
-              <th style={{ padding: '0.75rem 0', textAlign: 'right' }}>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-              <td style={{ padding: '0.75rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <HeartPulse size={16} color="#ff4d4f" /> Heart Rate
-              </td>
-              <td style={{ padding: '0.75rem 0', textAlign: 'right', color: hrStatus.color, fontWeight: 600 }}>{hrStatus.text}</td>
-            </tr>
-            <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-              <td style={{ padding: '0.75rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <Activity size={16} color="#ffc107" /> Blood Pressure
-              </td>
-              <td style={{ padding: '0.75rem 0', textAlign: 'right', color: bpStatus.color, fontWeight: 600 }}>{bpStatus.text}</td>
-            </tr>
-            <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-              <td style={{ padding: '0.75rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <Thermometer size={16} color="#20c997" /> Temperature
-              </td>
-              <td style={{ padding: '0.75rem 0', textAlign: 'right', color: tempStatus.color, fontWeight: 600 }}>{tempStatus.text}</td>
-            </tr>
-            <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-              <td style={{ padding: '0.75rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <Wind size={16} color="#00d2ff" /> Oxygen Level (SpO2)
-              </td>
-              <td style={{ padding: '0.75rem 0', textAlign: 'right', color: spo2Status.color, fontWeight: 600 }}>{spo2Status.text}</td>
-            </tr>
-            <tr>
-              <td style={{ padding: '0.75rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <Cpu size={16} color="var(--accent-primary)" /> AI Anomaly Risk
-              </td>
-              <td style={{ padding: '0.75rem 0', textAlign: 'right' }}>
-                <AiRiskBadge ai={latestData.ai} telemetryPoint={latestData} />
-              </td>
-            </tr>
-          </tbody>
-        </table>
+      <div style={{ marginTop: '1.25rem' }}>
+        <AiRiskCard ai={latestData.ai} telemetryPoint={latestData} />
       </div>
-
-      {/* History Chart */}
-      {chartData && chartData.labels.length > 0 ? (
-        <div style={{ marginTop: '1rem' }}>
-          <div style={{ height: '240px', width: '100%', background: 'rgba(0,0,0,0.2)', padding: '1rem', borderRadius: '8px' }}>
-            <Line data={chartData} options={chartOptions} redraw={false} />
-          </div>
-        </div>
-      ) : (
-        <div style={{ marginTop: '1rem' }}>
-          <h3 style={{ fontSize: '1.2rem', marginBottom: '0.75rem', color: 'rgba(255, 255, 255, 0.9)', textAlign: 'center', fontWeight: 'bold' }}>Previous Score Trend of 7 Days</h3>
-          <div style={{ padding: '2rem', textAlign: 'center', background: 'rgba(0,0,0,0.2)', borderRadius: '8px', color: 'var(--text-secondary)' }}>
-            Gathering 7-day health score data...
-          </div>
-        </div>
-      )}
-
     </div>
   );
 };
 
 export default React.memo(HealthScorePanel);
+

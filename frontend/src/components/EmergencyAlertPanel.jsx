@@ -14,28 +14,28 @@ export const AlertCard = memo(({ alert, onDismiss }) => {
   const config = {
     critical: {
       icon: AlertTriangle,
-      color: '#ff4d4f',
+      color: '#dc2626',
       label: 'CRITICAL',
       cardClass: 'card-critical',
       badgeClass: 'toast-badge-critical'
     },
     warning: {
       icon: AlertCircle,
-      color: '#ffc107',
+      color: '#d97706',
       label: 'WARNING',
       cardClass: 'card-warning',
       badgeClass: 'toast-badge-warning'
     },
     info: {
       icon: Info,
-      color: '#00d2ff',
+      color: '#0d9488',
       label: 'INFO',
       cardClass: 'card-info',
       badgeClass: 'toast-badge-info'
     },
     success: {
       icon: CheckCircle2,
-      color: '#20c997',
+      color: '#059669',
       label: 'RESOLVED',
       cardClass: 'card-success',
       badgeClass: 'toast-badge-success'
@@ -100,28 +100,29 @@ export const AlertCard = memo(({ alert, onDismiss }) => {
   );
 });
 
-const EmergencyAlertPanel = () => {
+const EmergencyAlertPanel = ({ isStationSidebar = false }) => {
   const { alerts, dismissAlert, dismissAll } = useEmergencyAlerts();
   const hasAlerts = Boolean(alerts && alerts.length > 0);
+  const shouldRender = isStationSidebar || hasAlerts;
 
   return (
     <aside
-      className={`emergency-alert-panel ${hasAlerts ? 'open' : ''}`}
+      className={`emergency-alert-panel ${isStationSidebar ? 'station-sidebar open' : (hasAlerts ? 'open' : '')}`}
       aria-label="Emergency Alerts Side Panel"
-      aria-hidden={!hasAlerts}
+      aria-hidden={!shouldRender}
     >
-      {hasAlerts && (
+      {shouldRender && (
         <div className="emergency-alert-panel-inner">
           <div className="emergency-alert-panel-header">
             <div className="alert-panel-title-group">
-              <ShieldAlert size={16} style={{ color: '#ff4d4f', flexShrink: 0 }} />
-              <h3 className="alert-panel-title">Emergency Alerts</h3>
+              <ShieldAlert size={18} style={{ color: '#ffffff', flexShrink: 0 }} />
+              <h3 className="alert-panel-title">Active Emergency Alerts</h3>
               <span className="alert-count-pill" title={`${alerts.length} active alert(s)`}>
                 {alerts.length}
               </span>
             </div>
 
-            {alerts.length > 1 && (
+            {alerts.length > 0 && (
               <button
                 type="button"
                 onClick={dismissAll}
@@ -134,13 +135,30 @@ const EmergencyAlertPanel = () => {
           </div>
 
           <div className="emergency-alert-panel-body">
-            {[...alerts].reverse().map((alert) => (
-              <AlertCard
-                key={alert.id}
-                alert={alert}
-                onDismiss={() => dismissAlert(alert.id)}
-              />
-            ))}
+            {hasAlerts ? (
+              [...alerts].reverse().map((alert) => (
+                <AlertCard
+                  key={alert.id}
+                  alert={alert}
+                  onDismiss={() => dismissAlert(alert.id)}
+                />
+              ))
+            ) : (
+              <div className="alert-standby-state">
+                <div className="alert-standby-icon">
+                  <CheckCircle2 size={24} style={{ color: '#16a34a' }} />
+                </div>
+                <h4 style={{ fontSize: '0.9rem', fontWeight: 700, margin: '0 0 0.25rem 0', color: 'var(--text-primary)' }}>
+                  No Active Alerts
+                </h4>
+                <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', margin: 0 }}>
+                  All patient telemetry and hardware sensor streams are within safe clinical thresholds.
+                </p>
+                <span className="badge badge-stable" style={{ marginTop: '0.75rem', fontSize: '0.7rem' }}>
+                  ● Monitoring Active
+                </span>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -149,3 +167,4 @@ const EmergencyAlertPanel = () => {
 };
 
 export default memo(EmergencyAlertPanel);
+

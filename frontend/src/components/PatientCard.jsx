@@ -42,14 +42,17 @@ const PatientCard = ({
       <button
         onClick={onClick}
         className="glass-panel"
+        role="button"
+        aria-pressed={isSelected}
+        aria-label={`Patient ${patient.name}, Room ${patient.room_number || 'N/A'}, Status: ${status}`}
         style={{
           padding: '0.85rem 1rem',
           width: '100%',
           textAlign: 'left',
           cursor: 'pointer',
           border: '1px solid',
-          borderColor: isSelected ? 'var(--accent-primary)' : 'var(--glass-border)',
-          background: isSelected ? 'rgba(0, 210, 255, 0.08)' : 'var(--bg-panel)',
+          borderColor: isSelected ? 'var(--accent-primary)' : 'var(--border-light)',
+          background: isSelected ? 'rgba(37, 99, 235, 0.08)' : '#ffffff',
           borderRadius: '10px',
           transition: 'all 0.2s ease',
           display: 'flex',
@@ -110,14 +113,46 @@ const PatientCard = ({
     );
   }
 
+  // Mini vitals data extraction with hardware sensor adaptation
+  const hr = latestVitals.hr ?? latestVitals.heartRate ?? latestVitals.heart_rate ?? latestVitals.pulse;
+  const maxIR = latestVitals.maxIR != null && latestVitals.maxIR > 0 ? latestVitals.maxIR : null;
+  const hrLabel = hr != null ? `${hr} BPM` : (maxIR != null ? `IR ${maxIR}` : '--');
+  const hrTitle = hr != null ? `Heart Rate: ${hr} BPM` : (maxIR != null ? `MAX30100 Raw Optical IR: ${maxIR}` : 'Heart Rate / Optical Stream');
+
+  const spo2 = latestVitals.spo2;
+  const maxRED = latestVitals.maxRED != null && latestVitals.maxRED > 0 ? latestVitals.maxRED : null;
+  const spo2Label = spo2 != null ? `${spo2}%` : (maxRED != null ? `RED ${maxRED}` : '--');
+  const spo2Title = spo2 != null ? `SpO2: ${spo2}%` : (maxRED != null ? `MAX30100 Raw Optical RED: ${maxRED}` : 'SpO2 / Optical Stream');
+
+  const dhtTemp = latestVitals.dhtTemp;
+  const bmpTemp = latestVitals.bmpTemp;
+  const temp = latestVitals.temp ?? latestVitals.temperature;
+  const tempDisplay = (dhtTemp != null || bmpTemp != null) ? `${dhtTemp ?? bmpTemp}°C` : (temp != null ? `${temp}°F` : '--');
+  const tempTitle = (dhtTemp != null || bmpTemp != null) ? `DHT11: ${dhtTemp ?? '--'}°C | BMP280: ${bmpTemp ?? '--'}°C` : (temp != null ? `Body Temp: ${temp}°F` : 'Temperature');
+
+  const ecgVal = latestVitals.ecg_val != null ? latestVitals.ecg_val : (latestVitals.ecg?.value ?? null);
+  const sys = latestVitals.bpSys ?? latestVitals.bp_sys;
+  const dia = latestVitals.bpDia ?? latestVitals.bp_dia;
+  const pressureVal = latestVitals.pressure ?? latestVitals.bmpPress;
+  const ecgBpDisplay = (sys != null && dia != null)
+    ? `${sys}/${dia}`
+    : (ecgVal != null ? `ECG ${ecgVal}` : (latestVitals.bp ?? (pressureVal != null ? `${pressureVal} hPa` : 'No Sensor')));
+  const ecgBpTitle = (sys != null && dia != null)
+    ? `Blood Pressure: ${sys}/${dia} mmHg`
+    : (ecgVal != null ? `AD8232 ECG Amplitude: ${ecgVal} ADC` : (pressureVal != null ? `Barometric Pressure: ${pressureVal} hPa` : 'Sensor Stream'));
+
   // Default Grid Variant
   return (
     <div
       className={`patient-card ${cardBorderClass}`}
       onClick={onClick}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick?.(); } }}
+      aria-label={`Patient ${patient.name}, Room ${patient.room_number || 'N/A'}, Health Status: ${status}`}
       style={{
         borderColor: isSelected ? 'var(--accent-primary)' : undefined,
-        background: isSelected ? 'rgba(0, 210, 255, 0.06)' : undefined,
+        background: isSelected ? 'rgba(37, 99, 235, 0.06)' : undefined,
         cursor: 'pointer'
       }}
     >
@@ -168,41 +203,33 @@ const PatientCard = ({
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', alignItems: 'flex-end', flexShrink: 0 }}>
-          <span className={`badge ${statusBadgeClass}`}>{status}</span>
+          <span className={`badge ${statusBadgeClass}`}>
+            {status === 'Critical' && <span className="pulse-dot" style={{ width: '6px', height: '6px', backgroundColor: '#ff4d4f', marginRight: '4px' }} />}
+            {status}
+          </span>
           <AiRiskBadge ai={latestVitals?.ai} telemetryPoint={latestVitals} style={{ fontSize: '0.68rem', padding: '0.15rem 0.5rem' }} />
         </div>
       </div>
 
-      {/* Mini Vitals Grid (Real-time data) */}
-      {(() => {
-        const hr = latestVitals.hr ?? latestVitals.heart_rate ?? latestVitals.pulse;
-        const spo2 = latestVitals.spo2;
-        const temp = latestVitals.temp ?? latestVitals.temperature;
-        const sys = latestVitals.bpSys ?? latestVitals.bp_sys;
-        const dia = latestVitals.bpDia ?? latestVitals.bp_dia;
-        const bpDisplay = (sys != null && dia != null) ? `${sys}/${dia}` : (latestVitals.bp ?? 'Unavailable');
-
-        return (
-          <div className="mini-vitals-grid">
-            <div className="mini-vital" title="Heart Rate">
-              <Heart color="#ff4d4f" />
-              <span>{hr != null ? `${hr} BPM` : '--'}</span>
-            </div>
-            <div className="mini-vital" title="SpO2">
-              <Wind color="#00d2ff" />
-              <span>{spo2 != null ? `${spo2}%` : '--'}</span>
-            </div>
-            <div className="mini-vital" title="Temperature">
-              <Thermometer color="#20c997" />
-              <span>{temp != null ? `${temp}°F` : '--'}</span>
-            </div>
-            <div className="mini-vital" title="Blood Pressure: Unavailable (No Sensor)">
-              <Activity color="#ffc107" />
-              <span>{bpDisplay}</span>
-            </div>
-          </div>
-        );
-      })()}
+      {/* Mini Vitals Grid (Real-time telemetry & sensors) */}
+      <div className="mini-vitals-grid">
+        <div className="mini-vital" title={hrTitle}>
+          <Heart color="#ff4d4f" />
+          <span>{hrLabel}</span>
+        </div>
+        <div className="mini-vital" title={spo2Title}>
+          <Wind color="#0d9488" />
+          <span>{spo2Label}</span>
+        </div>
+        <div className="mini-vital" title={tempTitle}>
+          <Thermometer color="#059669" />
+          <span>{tempDisplay}</span>
+        </div>
+        <div className="mini-vital" title={ecgBpTitle}>
+          <Activity color="#d97706" />
+          <span>{ecgBpDisplay}</span>
+        </div>
+      </div>
 
       {/* Action Footer if provided */}
       {onViewDetails && (

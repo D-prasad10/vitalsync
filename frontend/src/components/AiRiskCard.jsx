@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import React from 'react';
 import { Cpu, ShieldAlert, CheckCircle2, AlertTriangle, AlertCircle, HelpCircle } from 'lucide-react';
 
@@ -127,7 +128,7 @@ const AiRiskCard = ({ ai, telemetryPoint, variant = 'card', style = {} }) => {
 
   // Determine appearance based on risk level
   const isWarning = info.available && (info.riskLevel === 'warning' || info.anomaly);
-  const isNormal = info.available && info.riskLevel === 'normal' && !info.anomaly;
+  const _isNormal = info.available && info.riskLevel === 'normal' && !info.anomaly;
 
   const borderColor = !info.available
     ? 'var(--glass-border)'

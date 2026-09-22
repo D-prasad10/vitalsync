@@ -1,14 +1,16 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Search, Filter, ArrowLeft, Heart, Wind, Thermometer, Activity, User, Phone, Stethoscope, Bell, Plus, Trash2, CheckCircle2, AlertTriangle, ShieldAlert, Settings, Waves, Radio, MapPin, Gauge, Cpu, Navigation, Flame } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { Link } from 'react-router-dom';
+import { Search, Filter, ArrowLeft, Heart, Wind, Thermometer, Activity, User, Phone, Stethoscope, Bell, Plus, Trash2, CheckCircle2, AlertTriangle, ShieldAlert, Settings, Waves, Radio, MapPin, Gauge, Cpu, Navigation, Flame, Ambulance } from 'lucide-react';
 import SensorGraph from '../components/SensorGraph';
 import HistoryBarGraph from '../components/HistoryBarGraph';
 import HealthScorePanel from '../components/HealthScorePanel';
 import PatientCard from '../components/PatientCard';
 import { AiRiskBadge } from '../components/AiRiskCard';
-import { useRealtimeData, seedPatientTelemetry } from '../utils/telemetryStore';
+import { useRealtimeData, seedPatientTelemetry, useEmergencyResponse } from '../utils/telemetryStore';
 
 const DoctorDashboard = () => {
   const globalRealtimeData = useRealtimeData();
+  const { activeEmergency } = useEmergencyResponse();
   const [isMuted, setIsMuted] = useState(false);
   const [patients, setPatients] = useState([]);
   const [activePatient, setActivePatient] = useState(null);
@@ -16,8 +18,17 @@ const DoctorDashboard = () => {
   const [_groupedHistory, setGroupedHistory] = useState({});
   const [_selectedDate, setSelectedDate] = useState('');
   const [thresholds, setThresholds] = useState({});
-  const [_loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [loadingPatients, setLoadingPatients] = useState(true);
+  const [actionFeedback, setActionFeedback] = useState(null);
   const [deviceStatus, setDeviceStatus] = useState({ online: false, deviceId: null, lastSeen: null, ip: null });
+
+  const showFeedback = (type, message) => {
+    setActionFeedback({ type, message });
+    setTimeout(() => {
+      setActionFeedback(null);
+    }, 4500);
+  };
 
   // Hardware Config & Modal state
   const [hardwareConfig, setHardwareConfig] = useState({
@@ -84,12 +95,14 @@ const DoctorDashboard = () => {
 
   useEffect(() => {
     let mounted = true;
+    setLoadingPatients(true);
     fetch('http://localhost:5001/api/patients')
       .then(res => res.json())
       .then(data => {
         if (!mounted) return;
         const list = Array.isArray(data) ? data : [];
         setPatients(list);
+        setLoadingPatients(false);
 
         // Pre-seed telemetry for each patient from history so cards immediately render real data
         list.forEach(p => {
@@ -103,7 +116,10 @@ const DoctorDashboard = () => {
             .catch(() => {});
         });
       })
-      .catch(err => console.error('Failed to fetch patients:', err));
+      .catch(err => {
+        console.error('Failed to fetch patients:', err);
+        if (mounted) setLoadingPatients(false);
+      });
 
     return () => { mounted = false; };
   }, []);
@@ -163,7 +179,7 @@ const DoctorDashboard = () => {
         setShowHardwareModal(false);
       }
     } catch (err) {
-      alert('Failed to save hardware config: ' + err.message);
+      showFeedback('alert', 'Failed to save hardware config: ' + err.message);
     } finally {
       setSavingHardware(false);
     }
@@ -182,7 +198,7 @@ const DoctorDashboard = () => {
         setTimeout(() => setPulseSuccess(false), 2500);
       }
     } catch (err) {
-      alert('Failed to send test pulse: ' + err.message);
+      showFeedback('alert', 'Failed to send test pulse: ' + err.message);
     }
   };
 
@@ -201,8 +217,11 @@ const DoctorDashboard = () => {
       .then(res => res.json())
       .then(data => {
         if (data.success) {
-          alert('Threshold parameters saved successfully!');
+          showFeedback('success', 'Threshold parameters saved successfully!');
         }
+      })
+      .catch(err => {
+        showFeedback('alert', 'Failed to save thresholds: ' + err.message);
       });
   };
 
@@ -237,7 +256,7 @@ const DoctorDashboard = () => {
         setNewPatientForm({ name: '', age: '', gender: 'Not Specified', blood_group: '', weight: '', mobile: '', guardian_contact: '', room_number: '' });
       }
     } catch {
-      alert('Error registering patient');
+      showFeedback('alert', 'Error registering patient');
     }
   };
 
@@ -246,7 +265,7 @@ const DoctorDashboard = () => {
   };
 
   // Determine health status from real-time stream
-  const getPatientStatusData = (patientId, rtData = globalRealtimeData) => {
+  const getPatientStatusData = useCallback((patientId, rtData = globalRealtimeData) => {
     const data = rtData[patientId];
     if (!data || data.length === 0) return { status: 'Stable', className: 'status-stable', color: 'var(--status-stable)' };
     const latest = data[data.length - 1];
@@ -262,23 +281,39 @@ const DoctorDashboard = () => {
       return { status: 'Warning', className: 'status-warning', color: 'var(--status-warning)' };
     }
     return { status: 'Stable', className: 'status-stable', color: 'var(--status-stable)' };
-  };
+  }, [globalRealtimeData]);
 
+  // Clinical Triage KPI aggregations
+  const triageStats = useMemo(() => {
+    let stable = 0;
+    let warning = 0;
+    let critical = 0;
+    patients.forEach(p => {
+      const st = getPatientStatusData(p.id, globalRealtimeData).status;
+      if (st === 'Critical') critical++;
+      else if (st === 'Warning') warning++;
+      else stable++;
+    });
+    return {
+      total: patients.length,
+      stable,
+      warning,
+      critical
+    };
+  }, [patients, globalRealtimeData, getPatientStatusData]);
+
+  // Synchronized search & clinical status filter
   const filteredPatients = useMemo(() => {
     return patients.filter(p => {
       const matchesSearch =
         p.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (p.room_number && p.room_number.toString().includes(searchTerm)) ||
         (p.blood_group && p.blood_group.toLowerCase().includes(searchTerm.toLowerCase()));
-      const data = globalRealtimeData[p.id];
-      const score = (data && data.length > 0 && data[data.length - 1].healthScore !== undefined)
-        ? data[data.length - 1].healthScore
-        : 100;
-      const status = score < 50 ? 'Critical' : score < 80 ? 'Warning' : 'Stable';
+      const { status } = getPatientStatusData(p.id, globalRealtimeData);
       const matchesStatus = statusFilter === 'All' || status === statusFilter;
       return matchesSearch && matchesStatus;
     });
-  }, [patients, searchTerm, statusFilter, globalRealtimeData]);
+  }, [patients, searchTerm, statusFilter, globalRealtimeData, getPatientStatusData]);
 
   const realtimeForPatient = (activePatient && globalRealtimeData[activePatient.id]) ? globalRealtimeData[activePatient.id] : [];
   const currentRealtimeData = realtimeForPatient.length > 0 ? realtimeForPatient : history;
@@ -352,12 +387,204 @@ const DoctorDashboard = () => {
         </div>
       </div>
 
+      {/* ── ACCESSIBLE ACTION / ALERT FEEDBACK TOAST ──────────────────────── */}
+      {actionFeedback && (
+        <div
+          role={actionFeedback.type === 'alert' ? 'alert' : 'status'}
+          aria-live="polite"
+          className="fade-in glass-panel"
+          style={{
+            padding: '0.85rem 1.25rem',
+            marginBottom: '1.25rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '0.75rem',
+            background: actionFeedback.type === 'alert' ? 'rgba(255, 77, 79, 0.15)' : 'rgba(32, 201, 151, 0.15)',
+            border: `1px solid ${actionFeedback.type === 'alert' ? 'var(--status-critical)' : 'var(--status-stable)'}`,
+            color: actionFeedback.type === 'alert' ? '#ff4d4f' : '#20c997',
+            borderRadius: 'var(--radius-sm)',
+            fontSize: '0.9rem',
+            fontWeight: 600
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            {actionFeedback.type === 'alert' ? <ShieldAlert size={18} /> : <CheckCircle2 size={18} />}
+            <span>{actionFeedback.message}</span>
+          </div>
+          <button
+            onClick={() => setActionFeedback(null)}
+            style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: '1rem' }}
+            aria-label="Close notification"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {/* ── ACTIVE EMERGENCY RESPONSE CARD ───────────────────────────────── */}
+      {activeEmergency && activeEmergency.status !== 'COMPLETED' && activeEmergency.status !== 'CANCELLED' && (
+        <div
+          className="fade-in glass-panel"
+          style={{
+            marginBottom: '1.5rem',
+            padding: '1.15rem 1.4rem',
+            border: '1.5px solid #dc2626',
+            borderLeft: '6px solid #b91c1c',
+            background: 'linear-gradient(to right, #fff5f5, #ffffff)',
+            borderRadius: 'var(--radius-md)',
+            boxShadow: '0 4px 16px rgba(220, 38, 38, 0.12)'
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+              <div
+                style={{
+                  width: '42px',
+                  height: '42px',
+                  borderRadius: '50%',
+                  background: '#fee2e2',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#dc2626',
+                  flexShrink: 0
+                }}
+              >
+                <ShieldAlert size={22} />
+              </div>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                  <span style={{ fontWeight: 700, fontSize: '0.98rem', color: '#991b1b' }}>
+                    ACTIVE EMERGENCY: {activeEmergency.patientName || activeEmergency.patient_name || 'Inpatient'}
+                  </span>
+                  <span
+                    style={{
+                      background: '#dc2626',
+                      color: '#ffffff',
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      padding: '2px 8px',
+                      borderRadius: '12px'
+                    }}
+                  >
+                    {activeEmergency.emergencyType || activeEmergency.emergency_type || 'SOS'}
+                  </span>
+                  <span className="badge badge-warning" style={{ fontSize: '11px' }}>
+                    {activeEmergency.status}
+                  </span>
+                  <span className="demo-simulated-pill" style={{ fontSize: '10px' }}>
+                    DEMO / SIMULATED
+                  </span>
+                </div>
+                <div style={{ fontSize: '0.82rem', color: '#64748b', marginTop: '0.2rem', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                  <span>Ambulance: <b>{activeEmergency.ambulanceId || activeEmergency.ambulance_id || 'Pending Unit'}</b></span>
+                  <span>Distance: <b>{activeEmergency.currentDistance != null ? `${Number(activeEmergency.currentDistance).toFixed(1)} km` : (activeEmergency.current_distance != null ? `${Number(activeEmergency.current_distance).toFixed(1)} km` : '--')}</b></span>
+                  <span>Estimated ETA: <b>{activeEmergency.estimatedEta != null ? `${activeEmergency.estimatedEta} min` : (activeEmergency.estimated_eta_minutes != null ? `${activeEmergency.estimated_eta_minutes} min` : '--')}</b></span>
+                  <span>Progress: <b>{Math.round(activeEmergency.progress || 0)}%</b></span>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+              <div style={{ width: '110px' }}>
+                <div style={{ height: '6px', background: '#e2e8f0', borderRadius: '4px', overflow: 'hidden' }}>
+                  <div
+                    style={{
+                      height: '100%',
+                      width: `${Math.round(activeEmergency.progress || 0)}%`,
+                      backgroundColor: (activeEmergency.progress || 0) >= 100 ? '#10b981' : '#dc2626',
+                      transition: 'width 0.3s ease'
+                    }}
+                  />
+                </div>
+              </div>
+
+              <Link
+                to="/emergency"
+                className="btn-primary"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  fontSize: '0.85rem',
+                  padding: '0.45rem 0.95rem',
+                  textDecoration: 'none'
+                }}
+              >
+                <Ambulance size={16} />
+                <span>View Emergency Response</span>
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── PATIENT DIRECTORY (GRID VIEW) ────────────────────────────────── */}
       {!activePatient ? (
         <div>
+          {/* Clinical Triage KPI Summary Bar */}
+          <div className="triage-kpi-grid">
+            <div
+              className={`triage-kpi-card ${statusFilter === 'All' ? 'active-filter' : ''}`}
+              onClick={() => setStatusFilter('All')}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setStatusFilter('All'); } }}
+              aria-label="Filter: All Inpatients"
+            >
+              <div className="triage-kpi-label">
+                <User size={13} color="var(--accent-primary)" /> Total Inpatients
+              </div>
+              <div className="triage-kpi-val">{triageStats.total}</div>
+            </div>
+
+            <div
+              className={`triage-kpi-card ${statusFilter === 'Stable' ? 'active-filter' : ''}`}
+              onClick={() => setStatusFilter('Stable')}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setStatusFilter('Stable'); } }}
+              aria-label="Filter: Stable Patients"
+            >
+              <div className="triage-kpi-label" style={{ color: 'var(--status-stable)' }}>
+                <CheckCircle2 size={13} color="var(--status-stable)" /> Stable
+              </div>
+              <div className="triage-kpi-val" style={{ color: 'var(--status-stable)' }}>{triageStats.stable}</div>
+            </div>
+
+            <div
+              className={`triage-kpi-card ${statusFilter === 'Warning' ? 'active-filter' : ''}`}
+              onClick={() => setStatusFilter('Warning')}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setStatusFilter('Warning'); } }}
+              aria-label="Filter: Under Observation"
+            >
+              <div className="triage-kpi-label" style={{ color: 'var(--status-warning)' }}>
+                <AlertTriangle size={13} color="var(--status-warning)" /> Observation
+              </div>
+              <div className="triage-kpi-val" style={{ color: 'var(--status-warning)' }}>{triageStats.warning}</div>
+            </div>
+
+            <div
+              className={`triage-kpi-card ${statusFilter === 'Critical' ? 'active-filter' : ''}`}
+              onClick={() => setStatusFilter('Critical')}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setStatusFilter('Critical'); } }}
+              aria-label="Filter: Critical Triage"
+            >
+              <div className="triage-kpi-label" style={{ color: 'var(--status-critical)' }}>
+                <ShieldAlert size={13} color="var(--status-critical)" /> Critical Triage
+              </div>
+              <div className="triage-kpi-val" style={{ color: 'var(--status-critical)' }}>{triageStats.critical}</div>
+            </div>
+          </div>
+
           {/* Search & Status Filter Control Bar */}
           <div className="glass-panel" style={{ padding: '1.25rem', marginBottom: '1.5rem', display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
-            <div style={{ flex: 1, position: 'relative', minWidth: '240px' }}>
+            <div style={{ flex: 1, position: 'relative', minWidth: '180px' }}>
               <Search size={18} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
               <input
                 type="text"
@@ -391,11 +618,25 @@ const DoctorDashboard = () => {
 
           {/* Unified Patient Grid */}
           <div className="patient-grid">
-            {filteredPatients.length === 0 ? (
+            {loadingPatients ? (
+              <div className="empty-state glass-panel" style={{ gridColumn: '1 / -1', padding: '4rem 2rem' }}>
+                <div className="loading-spinner" />
+                <span style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-primary)', marginTop: '1rem' }}>
+                  Synchronizing Patient Directory...
+                </span>
+                <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                  Retrieving live telemetry records and active clinical nodes.
+                </span>
+              </div>
+            ) : filteredPatients.length === 0 ? (
               <div className="empty-state glass-panel" style={{ gridColumn: '1 / -1', padding: '4rem 2rem' }}>
                 <User size={36} />
                 <span style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-primary)' }}>No Patients Found</span>
-                <span style={{ fontSize: '0.85rem' }}>No patient records match your search criteria.</span>
+                <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                  {statusFilter !== 'All'
+                    ? `No patient records found under "${statusFilter}" status filter.`
+                    : 'No patient records match your search criteria.'}
+                </span>
               </div>
             ) : (
               filteredPatients.map(p => {
@@ -431,7 +672,7 @@ const DoctorDashboard = () => {
               <ArrowLeft size={18} /> Back to Directory
             </button>
 
-            <div className="glass-panel" style={{ flex: 1, padding: '1.25rem 1.5rem', display: 'flex', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap', minWidth: '280px' }}>
+            <div className="glass-panel" style={{ flex: 1, padding: '1.25rem 1.5rem', display: 'flex', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap', minWidth: 0 }}>
               <div className="patient-avatar" style={{ width: '56px', height: '56px', fontSize: '1.25rem' }}>
                 {(activePatient.name || 'Patient').trim().split(/\s+/).map(n => n[0] || '').join('').substring(0, 2).toUpperCase() || 'PT'}
               </div>
@@ -465,7 +706,7 @@ const DoctorDashboard = () => {
                 </div>
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', fontSize: '0.85rem', color: 'var(--text-secondary)', borderLeft: '1px solid var(--glass-border)', paddingLeft: '1.25rem' }}>
+              <div className="dossier-contact-block">
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                   <Stethoscope size={14} color="var(--accent-primary)" /> Doctor: <b>{activePatient.doctor_name || 'Dr. Smith'}</b>
                 </div>
@@ -496,10 +737,16 @@ const DoctorDashboard = () => {
                     <strong>{activePatient.name}'s</strong> vital parameters have crossed critical safety thresholds. Immediate clinical triage recommended.
                   </p>
                   <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-                    <button className="btn-danger btn-sm" onClick={() => alert('Calling Nurse Station for urgent assistance...')}>
+                    <button
+                      className="btn-danger btn-sm"
+                      onClick={() => showFeedback('alert', `Urgent alert dispatched to Nurse Station for ${activePatient.name} (Room ${activePatient.room_number || 'N/A'}).`)}
+                    >
                       Call Nurse Station
                     </button>
-                    <button className="btn-secondary btn-sm" onClick={() => alert(`Notifying emergency guardian: ${activePatient.guardian_contact || 'N/A'}`)}>
+                    <button
+                      className="btn-secondary btn-sm"
+                      onClick={() => showFeedback('alert', `Emergency notification sent to guardian (${activePatient.guardian_contact || 'N/A'}) for ${activePatient.name}.`)}
+                    >
                       Notify Family
                     </button>
                   </div>
@@ -528,6 +775,7 @@ const DoctorDashboard = () => {
                   <SensorGraph
                     title="Temperature (DHT11 & BMP280)"
                     unit="°C"
+                    loading={loading}
                     dataPoints={currentRealtimeData}
                     dataKey="temp"
                     color="#20c997"
@@ -544,6 +792,7 @@ const DoctorDashboard = () => {
                   <SensorGraph
                     title="MAX30100 (Raw Optical Only)"
                     unit="IR/RED"
+                    loading={loading}
                     dataPoints={currentRealtimeData}
                     dataKey="maxIR"
                     color="#ff4d4f"
@@ -560,6 +809,7 @@ const DoctorDashboard = () => {
                   <SensorGraph
                     title="Blood Pressure"
                     unit="mmHg"
+                    loading={loading}
                     dataPoints={currentRealtimeData}
                     dataKey="bpSys"
                     color="#ffc107"
@@ -572,6 +822,7 @@ const DoctorDashboard = () => {
                   <SensorGraph
                     title="Humidity (DHT11)"
                     unit="%"
+                    loading={loading}
                     dataPoints={currentRealtimeData}
                     dataKey="humidity"
                     color="#00d2ff"
@@ -609,6 +860,7 @@ const DoctorDashboard = () => {
                 <SensorGraph
                   title="AD8232 Continuous ECG Waveform"
                   unit="ADC"
+                  loading={loading}
                   dataPoints={currentRealtimeData}
                   dataKey="ecg_val"
                   color="#00f0ff"
@@ -720,7 +972,8 @@ const DoctorDashboard = () => {
                       style={{
                         padding: '0.85rem',
                         borderRadius: '10px',
-                        background: 'rgba(0,0,0,0.25)',
+                        background: '#f8fafc',
+                        border: '1px solid var(--border-light)',
                         borderLeft: `4px solid ${reminder.status === 'Completed' ? 'var(--success)' : 'var(--warning)'}`
                       }}
                     >
@@ -755,8 +1008,8 @@ const DoctorDashboard = () => {
                   <Settings size={18} /> Safety Thresholds
                 </h2>
                 <form onSubmit={saveThresholds} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  <div style={{ background: 'rgba(0,0,0,0.25)', padding: '0.75rem', borderRadius: '8px', borderLeft: '3px solid #ff4d4f' }}>
-                    <label style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: '#ff4d4f', fontWeight: 600, marginBottom: '0.4rem' }}>
+                  <div style={{ background: '#fffbeb', padding: '0.75rem', borderRadius: '8px', border: '1px solid #fde68a', borderLeft: '3px solid #dc2626' }}>
+                    <label style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: '#dc2626', fontWeight: 600, marginBottom: '0.4rem' }}>
                       Heart Rate Limits (BPM)
                     </label>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
@@ -765,8 +1018,8 @@ const DoctorDashboard = () => {
                     </div>
                   </div>
 
-                  <div style={{ background: 'rgba(0,0,0,0.25)', padding: '0.75rem', borderRadius: '8px', borderLeft: '3px solid #ffc107' }}>
-                    <label style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: '#ffc107', fontWeight: 600, marginBottom: '0.4rem' }}>
+                  <div style={{ background: '#fffbeb', padding: '0.75rem', borderRadius: '8px', border: '1px solid #fde68a', borderLeft: '3px solid #d97706' }}>
+                    <label style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: '#d97706', fontWeight: 600, marginBottom: '0.4rem' }}>
                       Max Systolic/Diastolic (mmHg)
                     </label>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
@@ -819,13 +1072,13 @@ const DoctorDashboard = () => {
 
       {/* ── ADD PATIENT MODAL ────────────────────────────────────────────── */}
       {isAddModalOpen && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '1rem' }}>
-          <div className="glass-panel fade-in" style={{ padding: '2rem', width: '100%', maxWidth: '520px', position: 'relative', border: '1px solid var(--accent-primary)' }}>
-            <h2 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '1.5rem', borderBottom: '1px solid var(--glass-border)', paddingBottom: '0.75rem', color: 'var(--accent-primary)' }}>
+        <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15, 23, 42, 0.45)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '1rem' }}>
+          <div className="glass-panel modal-container" style={{ padding: '2rem', width: '100%', maxWidth: '520px', position: 'relative', border: '1px solid var(--border-light)', boxShadow: 'var(--shadow-dropdown)', borderRadius: '16px', background: '#ffffff' }}>
+            <h2 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '1.5rem', borderBottom: '1px solid var(--border-light)', paddingBottom: '0.75rem', color: 'var(--accent-primary)' }}>
               Register New Patient Record
             </h2>
 
-            <form onSubmit={handleAddPatientSubmit} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+            <form onSubmit={handleAddPatientSubmit} className="modal-form-grid">
               <div style={{ gridColumn: '1 / -1' }}>
                 <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.4rem', textTransform: 'uppercase' }}>Full Name *</label>
                 <input required type="text" name="name" value={newPatientForm.name} onChange={handleNewPatientChange} className="glass-input" placeholder="e.g. John Doe" />
@@ -867,7 +1120,7 @@ const DoctorDashboard = () => {
               </div>
 
               <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginTop: '1rem' }}>
-                <button type="button" onClick={() => setIsAddModalOpen(false)} style={{ background: 'transparent', border: '1px solid var(--glass-border)', color: 'var(--text-secondary)', padding: '0.6rem 1.25rem', borderRadius: '8px', cursor: 'pointer' }}>Cancel</button>
+                <button type="button" onClick={() => setIsAddModalOpen(false)} style={{ background: '#ffffff', border: '1px solid var(--border-light)', color: 'var(--text-secondary)', padding: '0.6rem 1.25rem', borderRadius: '8px', cursor: 'pointer', fontWeight: 500 }}>Cancel</button>
                 <button type="submit" className="btn-primary">Register Patient</button>
               </div>
             </form>
@@ -877,9 +1130,9 @@ const DoctorDashboard = () => {
 
       {/* ── ESP8266 HARDWARE CONNECTION MODAL ────────────────────────────── */}
       {showHardwareModal && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.78)', backdropFilter: 'blur(5px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '1rem' }}>
-          <div className="glass-panel fade-in" style={{ padding: '2rem', width: '100%', maxWidth: '580px', position: 'relative', border: '1px solid var(--accent-primary)', maxHeight: '90vh', overflowY: 'auto' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid var(--glass-border)', paddingBottom: '0.75rem' }}>
+        <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15, 23, 42, 0.45)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '1rem' }}>
+          <div className="glass-panel modal-container" style={{ padding: '2rem', width: '100%', maxWidth: '580px', position: 'relative', border: '1px solid var(--border-light)', boxShadow: 'var(--shadow-dropdown)', borderRadius: '16px', background: '#ffffff', maxHeight: '90vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid var(--border-light)', paddingBottom: '0.75rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
                 <Cpu size={22} color="var(--accent-primary)" />
                 <h2 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
@@ -891,7 +1144,7 @@ const DoctorDashboard = () => {
               </button>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.85rem 1rem', background: deviceStatus.online ? 'rgba(32, 201, 151, 0.12)' : 'rgba(255, 193, 7, 0.12)', border: `1px solid ${deviceStatus.online ? 'var(--status-stable)' : 'var(--warning)'}`, borderRadius: '10px', marginBottom: '1.25rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.85rem 1rem', background: deviceStatus.online ? 'var(--success-bg)' : 'var(--warning-bg)', border: `1px solid ${deviceStatus.online ? 'var(--success-border)' : 'var(--warning-border)'}`, borderRadius: '10px', marginBottom: '1.25rem' }}>
               <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: deviceStatus.online ? 'var(--status-stable)' : 'var(--warning)', boxShadow: deviceStatus.online ? '0 0 8px var(--status-stable)' : 'none' }} />
               <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: 700, fontSize: '0.9rem', color: deviceStatus.online ? 'var(--status-stable)' : 'var(--warning)' }}>
@@ -909,7 +1162,7 @@ const DoctorDashboard = () => {
                 Option A: Connect via ESP8266 Web Server IP
               </label>
               <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', margin: '0 0 0.75rem 0' }}>
-                If your ESP8266 serves <code>GET /data</code> on your Wi-Fi, enter its IP address below. SWASTHYAEDGE will automatically poll it every 1.5 seconds.
+                If your ESP8266 serves <code>GET /data</code> on your Wi-Fi, enter its IP address below. MediResQ will automatically poll it every 1.5 seconds.
               </p>
               <div style={{ display: 'flex', gap: '0.5rem' }}>
                 <input
@@ -932,20 +1185,20 @@ const DoctorDashboard = () => {
             </form>
 
             {/* Mode 2: ESP8266 HTTP POST Address */}
-            <div style={{ padding: '1rem', background: 'rgba(0, 210, 255, 0.05)', border: '1px solid rgba(0, 210, 255, 0.2)', borderRadius: '10px', marginBottom: '1.5rem' }}>
-              <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--accent-primary)', marginBottom: '0.35rem' }}>
+            <div style={{ padding: '1rem', background: '#f0fdfa', border: '1px solid #ccfbf1', borderRadius: '10px', marginBottom: '1.5rem' }}>
+              <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--accent-secondary)', marginBottom: '0.35rem' }}>
                 Option B: ESP8266 Direct HTTP POST Address
               </div>
               <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: '0 0 0.5rem 0' }}>
                 If your ESP8266 Arduino code is configured to POST JSON packets directly, configure it to send to this Local Wi-Fi address:
               </p>
-              <div style={{ background: 'rgba(0,0,0,0.4)', padding: '0.5rem 0.75rem', borderRadius: '6px', fontFamily: 'monospace', fontSize: '0.82rem', color: '#00d2ff', wordBreak: 'break-all', userSelect: 'all' }}>
+              <div style={{ background: '#ffffff', border: '1px solid #cbd5e1', padding: '0.5rem 0.75rem', borderRadius: '6px', fontFamily: 'monospace', fontSize: '0.82rem', color: 'var(--accent-primary)', wordBreak: 'break-all', userSelect: 'all' }}>
                 {hardwareConfig.lanIngestionUrl || `http://${window.location.hostname}:5001/api/telemetry/esp8266`}
               </div>
             </div>
 
             {/* Test Hardware Pulse */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '1rem', borderTop: '1px solid var(--glass-border)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '1rem', borderTop: '1px solid var(--border-light)' }}>
               <button
                 type="button"
                 onClick={handleTriggerTestPulse}

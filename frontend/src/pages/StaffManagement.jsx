@@ -2,8 +2,8 @@ import { useState, useEffect, useMemo } from 'react';
 import { Users, UserPlus, Trash2, Stethoscope, Activity, Phone, Mail, ShieldCheck, Search, Filter } from 'lucide-react';
 
 const ROLES = [
-  { value: 'doctor', label: 'Doctor', icon: Stethoscope, color: 'var(--accent-primary)', bg: 'rgba(0,210,255,0.1)' },
-  { value: 'caretaker', label: 'Caretaker', icon: Activity, color: 'var(--success)', bg: 'rgba(32,201,151,0.1)' },
+  { value: 'doctor', label: 'Doctor', icon: Stethoscope, color: 'var(--accent-primary)', bg: 'var(--info-bg)' },
+  { value: 'caretaker', label: 'Caretaker', icon: Activity, color: 'var(--accent-secondary)', bg: 'var(--teal-bg)' },
 ];
 
 const defaultForm = { staff_id: '', role: 'doctor', name: '', mobile: '', email: '' };
@@ -106,7 +106,7 @@ const StaffManagement = () => {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <div style={{ width: '42px', height: '42px', borderRadius: '12px', background: 'rgba(0,210,255,0.1)', border: '1px solid rgba(0,210,255,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ width: '42px', height: '42px', borderRadius: '12px', background: 'var(--accent-gradient-subtle)', border: '1px solid var(--teal-border)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <ShieldCheck size={24} style={{ color: 'var(--accent-primary)' }} />
           </div>
           <div>
@@ -126,14 +126,14 @@ const StaffManagement = () => {
       </div>
 
       {successMsg && (
-        <div style={{ padding: '0.875rem 1.25rem', background: 'rgba(32,201,151,0.1)', border: '1px solid rgba(32,201,151,0.3)', borderRadius: '10px', color: 'var(--success)', marginBottom: '1.5rem', fontWeight: 500 }}>
+        <div style={{ padding: '0.875rem 1.25rem', background: 'var(--success-bg)', border: '1px solid var(--success-border)', borderRadius: '10px', color: '#166534', marginBottom: '1.5rem', fontWeight: 600 }}>
           {successMsg}
         </div>
       )}
 
       {/* Add Staff Form */}
       {showForm && (
-        <div className="glass-panel fade-in" style={{ padding: '2rem', marginBottom: '2rem', border: '1px solid rgba(0,210,255,0.25)' }}>
+        <div className="glass-panel fade-in" style={{ padding: '2rem', marginBottom: '2rem', border: '1px solid var(--border-light)', boxShadow: 'var(--shadow-md)', background: '#ffffff', borderRadius: '14px' }}>
           <h2 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--accent-primary)' }}>
             <UserPlus size={20} /> Register New Staff Account
           </h2>
@@ -194,7 +194,7 @@ const StaffManagement = () => {
           </div>
 
           {serverError && (
-            <div style={{ marginTop: '1rem', padding: '0.75rem 1rem', background: 'rgba(255,77,79,0.1)', border: '1px solid rgba(255,77,79,0.25)', borderRadius: '8px', color: 'var(--danger)', fontSize: '0.875rem' }}>
+            <div style={{ marginTop: '1rem', padding: '0.75rem 1rem', background: 'var(--danger-bg)', border: '1px solid var(--danger-border)', borderRadius: '8px', color: '#991b1b', fontSize: '0.875rem', fontWeight: 500 }}>
               {serverError}
             </div>
           )}
