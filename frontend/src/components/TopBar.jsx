@@ -2,7 +2,7 @@ import React from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   HeartPulse, Menu, Bell, LogOut, User,
-  Stethoscope, Activity, FileText, ShieldCheck
+  Stethoscope, Activity, FileText, ShieldCheck, Ambulance
 } from 'lucide-react';
 import { useEmergencyAlerts } from '../utils/telemetryStore';
 
@@ -84,6 +84,14 @@ const TopBar = ({ user, onLogout, onToggleSidebar }) => {
         >
           <ShieldCheck size={16} />
           <span>Staff Management Station</span>
+        </NavLink>
+
+        <NavLink
+          to="/emergency"
+          className={({ isActive }) => `topbar-nav-link ${isActive ? 'active' : ''}`}
+        >
+          <Ambulance size={16} />
+          <span>Emergency Response</span>
         </NavLink>
       </nav>
 

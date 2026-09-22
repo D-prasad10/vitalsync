@@ -7,6 +7,13 @@ const nodemailer = require('nodemailer');
 const axios = require('axios');
 const os = require('os');
 const db = require('./database');
+const {
+  isValidCoordinates,
+  haversineDistance,
+  calculateETA,
+  calculateProgress,
+  AmbulanceSimulatorService
+} = require('./ambulanceSimulator');
 
 // ── Email Transporter ──────────────────────────────────────────────────────────
 const transporter = nodemailer.createTransport({
@@ -29,9 +36,12 @@ const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
     origin: '*',
-    methods: ['GET', 'POST']
+    methods: ['GET', 'POST', 'PUT', 'DELETE']
   }
 });
+
+const ambulanceSimulator = new AmbulanceSimulatorService(db, io);
+ambulanceSimulator.start();
 
 const PORT = process.env.PORT || 5001;
 
@@ -236,41 +246,86 @@ app.get('/api/patients/:id/history', (req, res) => {
   // Get history from the last 7 days
   const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
 
-  db.all(
-    'SELECT * FROM sensor_logs WHERE patient_id = ? AND timestamp > ? ORDER BY timestamp ASC',
-    [patientId, sevenDaysAgo],
-    (err, rows) => {
-      if (err) return res.status(500).json({ error: err.message });
-      const enriched = (rows || []).map(r => {
-        let payload = {};
-        if (r.raw_payload) {
-          try { payload = JSON.parse(r.raw_payload); } catch (_) {}
-        }
-        return {
-          ...r,
-          ...payload,
-          id: r.id,
-          patient_id: r.patient_id,
-          patientId: r.patient_id,
-          timestamp: r.timestamp,
-          dhtTemp: payload.dhtTemp ?? r.dht_temp,
-          bmpTemp: payload.bmpTemp ?? r.bmp_temp,
-          temp: payload.temp ?? r.temp,
-          humidity: payload.humidity ?? r.humidity,
-          pressure: payload.pressure ?? r.pressure,
-          ecg: payload.ecg ?? (r.ecg_val != null ? { value: r.ecg_val, leadOffPlus: false, leadOffMinus: false, leadsConnected: true } : null),
-          ecg_val: payload.ecg_val ?? r.ecg_val,
-          maxFound: payload.maxFound !== false,
-          maxIR: payload.maxIR ?? r.max_ir,
-          maxRED: payload.maxRED ?? r.max_red,
-          mq135: payload.mq135 ?? r.mq135,
-          healthScore: payload.healthScore ?? r.health_score ?? 100,
-          deviceStatus: payload.deviceStatus || 'ONLINE'
-        };
-      });
-      res.json(enriched);
-    }
-  );
+  const processRows = (rows) => {
+    const enriched = (rows || []).map(r => {
+      let payload = {};
+      if (r.raw_payload) {
+        try { payload = JSON.parse(r.raw_payload); } catch (_) {}
+      }
+      const sys = payload.bpSys ?? payload.bp_sys ?? r.bp_sys ?? null;
+      const dia = payload.bpDia ?? payload.bp_dia ?? r.bp_dia ?? null;
+      const heartRate = payload.hr ?? payload.heartRate ?? payload.heart_rate ?? r.hr ?? null;
+      const oxygen = payload.spo2 ?? r.spo2 ?? null;
+      const temperature = payload.temp ?? payload.temperature ?? r.temp ?? null;
+      const press = payload.bmpPress ?? payload.pressure ?? r.pressure ?? null;
+
+      return {
+        ...r,
+        ...payload,
+        id: r.id,
+        patient_id: r.patient_id,
+        patientId: r.patient_id,
+        timestamp: r.timestamp,
+        hr: heartRate,
+        heartRate,
+        pulse: heartRate,
+        spo2: oxygen,
+        bpSys: sys,
+        bp_sys: sys,
+        bpDia: dia,
+        bp_dia: dia,
+        bp: (sys != null && dia != null) ? `${sys}/${dia}` : null,
+        temp: temperature,
+        temperature,
+        dhtTemp: payload.dhtTemp ?? r.dht_temp,
+        bmpTemp: payload.bmpTemp ?? r.bmp_temp,
+        pressure: press,
+        bmpPress: press,
+        humidity: payload.humidity ?? r.humidity,
+        ecg: payload.ecg ?? (r.ecg_val != null ? { value: r.ecg_val, leadOffPlus: false, leadOffMinus: false, leadsConnected: true } : null),
+        ecg_val: payload.ecg_val ?? r.ecg_val,
+        maxFound: payload.maxFound !== false,
+        maxIR: payload.maxIR ?? r.max_ir,
+        maxRED: payload.maxRED ?? r.max_red,
+        mq135: payload.mq135 ?? r.mq135,
+        latitude: payload.latitude ?? payload.gpsLat ?? payload.gps?.latitude ?? r.gps_lat ?? null,
+        longitude: payload.longitude ?? payload.gpsLng ?? payload.gps?.longitude ?? r.gps_lng ?? null,
+        gpsLat: payload.latitude ?? payload.gpsLat ?? payload.gps?.latitude ?? r.gps_lat ?? null,
+        gpsLng: payload.longitude ?? payload.gpsLng ?? payload.gps?.longitude ?? r.gps_lng ?? null,
+        gpsFix: Boolean(payload.gpsFix ?? payload.gps?.fix ?? (r.gps_lat && r.gps_lng)),
+        gpsSat: Number(payload.gpsSat ?? payload.gps?.satellites ?? (r.gps_lat && r.gps_lng ? 8 : 0)),
+        healthScore: payload.healthScore ?? payload.health_score ?? r.health_score ?? 100,
+        health_score: payload.healthScore ?? payload.health_score ?? r.health_score ?? 100,
+        deviceStatus: payload.deviceStatus || 'ONLINE'
+      };
+    });
+    res.json(enriched);
+  };
+
+  // Support limit parameter: ?limit=all for full report ranges, or number of recent points (default 80)
+  const isAll = req.query.limit === 'all';
+  const limit = isAll ? 5000 : (Math.min(500, Math.max(10, parseInt(req.query.limit, 10) || 80)));
+
+  if (isAll) {
+    db.all(
+      'SELECT * FROM sensor_logs WHERE patient_id = ? AND timestamp > ? ORDER BY timestamp ASC LIMIT ?',
+      [patientId, sevenDaysAgo, limit],
+      (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        processRows(rows || []);
+      }
+    );
+  } else {
+    // Default fast query: get the most recent N points in chronological order
+    db.all(
+      'SELECT * FROM (SELECT * FROM sensor_logs WHERE patient_id = ? ORDER BY timestamp DESC LIMIT ?) ORDER BY timestamp ASC',
+      [patientId, limit],
+      (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        processRows(rows || []);
+      }
+    );
+  }
 });
 
 // GET /api/patients/:id/latest - returns the most recent telemetry point
@@ -286,6 +341,13 @@ app.get('/api/patients/:id/latest', (req, res) => {
       if (row.raw_payload) {
         try { payload = JSON.parse(row.raw_payload); } catch (_) {}
       }
+      const sys = payload.bpSys ?? payload.bp_sys ?? row.bp_sys ?? null;
+      const dia = payload.bpDia ?? payload.bp_dia ?? row.bp_dia ?? null;
+      const heartRate = payload.hr ?? payload.heartRate ?? payload.heart_rate ?? row.hr ?? null;
+      const oxygen = payload.spo2 ?? row.spo2 ?? null;
+      const temperature = payload.temp ?? payload.temperature ?? row.temp ?? null;
+      const press = payload.bmpPress ?? payload.pressure ?? row.pressure ?? null;
+
       res.json({
         ...row,
         ...payload,
@@ -293,18 +355,36 @@ app.get('/api/patients/:id/latest', (req, res) => {
         patient_id: row.patient_id,
         patientId: row.patient_id,
         timestamp: row.timestamp,
+        hr: heartRate,
+        heartRate,
+        pulse: heartRate,
+        spo2: oxygen,
+        bpSys: sys,
+        bp_sys: sys,
+        bpDia: dia,
+        bp_dia: dia,
+        bp: (sys != null && dia != null) ? `${sys}/${dia}` : null,
+        temp: temperature,
+        temperature,
         dhtTemp: payload.dhtTemp ?? row.dht_temp,
         bmpTemp: payload.bmpTemp ?? row.bmp_temp,
-        temp: payload.temp ?? row.temp,
+        pressure: press,
+        bmpPress: press,
         humidity: payload.humidity ?? row.humidity,
-        pressure: payload.pressure ?? row.pressure,
         ecg: payload.ecg ?? (row.ecg_val != null ? { value: row.ecg_val, leadOffPlus: false, leadOffMinus: false, leadsConnected: true } : null),
         ecg_val: payload.ecg_val ?? row.ecg_val,
         maxFound: payload.maxFound !== false,
         maxIR: payload.maxIR ?? row.max_ir,
         maxRED: payload.maxRED ?? row.max_red,
         mq135: payload.mq135 ?? row.mq135,
-        healthScore: payload.healthScore ?? row.health_score ?? 100,
+        latitude: payload.latitude ?? payload.gpsLat ?? payload.gps?.latitude ?? row.gps_lat ?? null,
+        longitude: payload.longitude ?? payload.gpsLng ?? payload.gps?.longitude ?? row.gps_lng ?? null,
+        gpsLat: payload.latitude ?? payload.gpsLat ?? payload.gps?.latitude ?? row.gps_lat ?? null,
+        gpsLng: payload.longitude ?? payload.gpsLng ?? payload.gps?.longitude ?? row.gps_lng ?? null,
+        gpsFix: Boolean(payload.gpsFix ?? payload.gps?.fix ?? (row.gps_lat && row.gps_lng)),
+        gpsSat: Number(payload.gpsSat ?? payload.gps?.satellites ?? (row.gps_lat && row.gps_lng ? 8 : 0)),
+        healthScore: payload.healthScore ?? payload.health_score ?? row.health_score ?? 100,
+        health_score: payload.healthScore ?? payload.health_score ?? row.health_score ?? 100,
         deviceStatus: payload.deviceStatus || 'ONLINE'
       });
     }
@@ -344,6 +424,49 @@ app.post('/api/patients/:id/thresholds', (req, res) => {
 const deviceHeartbeats = new Map();
 const devicePatientMapping = new Map(); // deviceId -> patientId
 const lastDbSavePerPatient = new Map(); // patientId -> lastTimestamp
+
+// In-memory active alerts cache
+const activeAlerts = new Map();
+
+function recordActiveAlert(alertObj) {
+  if (!alertObj || !alertObj.id) return;
+  activeAlerts.set(alertObj.id, alertObj);
+  if (activeAlerts.size > 50) {
+    const firstKey = activeAlerts.keys().next().value;
+    activeAlerts.delete(firstKey);
+  }
+  db.run(
+    `INSERT OR REPLACE INTO alerts (id, patient_id, patient_name, severity, message, alerts, timestamp, status)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      alertObj.id,
+      alertObj.patient_id || alertObj.patientId,
+      alertObj.patient_name || alertObj.patientName,
+      alertObj.severity || 'warning',
+      alertObj.message || (alertObj.alerts ? alertObj.alerts.join(' • ') : 'Threshold alert'),
+      JSON.stringify(alertObj.alerts || []),
+      alertObj.timestamp || Date.now(),
+      alertObj.status || 'active'
+    ],
+    () => {}
+  );
+}
+
+// Pre-load active alerts from database on startup
+db.all('SELECT * FROM alerts WHERE status = "active" ORDER BY timestamp DESC LIMIT 20', [], (err, rows) => {
+  if (!err && rows) {
+    rows.forEach(r => {
+      let alertsArr = [];
+      try { alertsArr = JSON.parse(r.alerts); } catch (_) { alertsArr = [r.message]; }
+      activeAlerts.set(r.id, {
+        ...r,
+        patientId: r.patient_id,
+        patientName: r.patient_name,
+        alerts: alertsArr
+      });
+    });
+  }
+});
 
 // Load initial patient-to-device mapping from database
 db.all('SELECT id, device_id FROM patients WHERE device_id IS NOT NULL', [], (err, rows) => {
@@ -436,15 +559,18 @@ function ingestHardwareTelemetry(raw, clientIp = null) {
     gyroZ: Number(gyro.gyroZ ?? gyro.z ?? 0),
   };
 
-  // 4. MAX30100 Pulse Oximeter: RAW OPTICAL SIGNALS ONLY (IR & RED)
-  // CRITICAL REQUIREMENT: Do NOT invent fake heart rate or SpO2!
+  // 4. MAX30100 Pulse Oximeter: RAW OPTICAL SIGNALS & Clinical Vitals
   const maxFound = Boolean(src.maxFound !== false && (src.max30100?.connected !== false));
   const maxIR = src.maxIR != null ? Number(src.maxIR) : (src.max30100?.rawIR != null ? Number(src.max30100.rawIR) : 0);
   const maxRED = src.maxRED != null ? Number(src.maxRED) : (src.max30100?.rawRED != null ? Number(src.max30100.rawRED) : 0);
 
-  // Heart Rate & SpO2 are strictly null unless authentic physiological calculation exists
-  const heartRate = null;
-  const spo2 = null;
+  // Accept physiological calculation or incoming telemetry readings
+  const heartRate = (src.hr ?? src.heartRate ?? src.heart_rate ?? src.pulse) != null
+    ? Number(src.hr ?? src.heartRate ?? src.heart_rate ?? src.pulse)
+    : null;
+  const spo2 = (src.spo2 ?? src.oxygen) != null
+    ? Number(src.spo2 ?? src.oxygen)
+    : null;
 
   // 5. MQ-135 Air Quality (Digital: 0 = LOW/Alert, 1 = HIGH/Normal)
   let mq135Digital = 1;
@@ -468,27 +594,50 @@ function ingestHardwareTelemetry(raw, clientIp = null) {
     fix: gpsFix
   };
 
-  // 7. Blood Pressure: Hardware has NO BP sensor. Explicitly null. NEVER fabricated.
-  const bpSys = null;
-  const bpDia = null;
+  // 7. Blood Pressure: Accept if present from telemetry, or null
+  const bpSys = (src.bpSys ?? src.bp_sys ?? src.systolic) != null
+    ? Number(src.bpSys ?? src.bp_sys ?? src.systolic)
+    : null;
+  const bpDia = (src.bpDia ?? src.bp_dia ?? src.diastolic) != null
+    ? Number(src.bpDia ?? src.bp_dia ?? src.diastolic)
+    : null;
 
-  // Calculate Health Score based on genuine available hardware telemetry
+  // Calculate Health Score based on genuine available physiological & hardware telemetry
   let totalWeights = 0;
   let earnedScore = 0;
 
+  if (heartRate != null) {
+    totalWeights += 25;
+    if (heartRate >= 60 && heartRate <= 100) earnedScore += 25;
+    else if ((heartRate >= 50 && heartRate < 60) || (heartRate > 100 && heartRate <= 120)) earnedScore += 12;
+  }
+  if (spo2 != null) {
+    totalWeights += 25;
+    if (spo2 >= 95) earnedScore += 25;
+    else if (spo2 >= 90) earnedScore += 12;
+  }
+  if (bpSys != null) {
+    totalWeights += 25;
+    if (bpSys >= 90 && bpSys <= 120) earnedScore += 25;
+    else if ((bpSys >= 80 && bpSys < 90) || (bpSys > 120 && bpSys <= 140)) earnedScore += 12;
+  }
   if (tempF != null) {
-    totalWeights += 40;
-    if (tempF >= 97 && tempF <= 99) earnedScore += 40;
-    else if (tempF >= 96 && tempF <= 100.4) earnedScore += 25;
+    totalWeights += 25;
+    if (tempF >= 97 && tempF <= 99) earnedScore += 25;
+    else if (tempF >= 96 && tempF <= 100.4) earnedScore += 12;
   }
 
-  totalWeights += 35;
-  if (mq135Status === 'NORMAL') earnedScore += 35;
+  if (totalWeights === 0) {
+    totalWeights = 100;
+    earnedScore = 100;
+    if (mq135Status === 'ALERT') earnedScore -= 40;
+    if (leadOffPlus || leadOffMinus) earnedScore -= 30;
+  } else {
+    if (mq135Status === 'ALERT') earnedScore = Math.max(0, earnedScore - 25);
+    if (leadOffPlus || leadOffMinus) earnedScore = Math.max(0, earnedScore - 15);
+  }
 
-  totalWeights += 25;
-  if (!leadOffPlus && !leadOffMinus) earnedScore += 25;
-
-  const healthScore = totalWeights > 0 ? Math.round((earnedScore / totalWeights) * 100) : 100;
+  const healthScore = Math.min(100, Math.max(0, Math.round((earnedScore / totalWeights) * 100)));
 
   // Track device heartbeat with IP and liveness
   deviceHeartbeats.set(deviceId, {
@@ -521,6 +670,7 @@ function ingestHardwareTelemetry(raw, clientIp = null) {
     // Environmental
     humidity,
     pressure,
+    bmpPress: pressure,
 
     // AD8232 ECG
     ecg: {
@@ -543,18 +693,21 @@ function ingestHardwareTelemetry(raw, clientIp = null) {
       connected: maxFound,
       rawIR: maxIR,
       rawRED: maxRED,
-      heartRate: null,
-      spo2: null,
+      heartRate,
+      spo2,
       statusText: maxFound ? 'Optical Sensor Online' : 'Sensor Not Detected'
     },
 
     // Medical Clinical Vitals
-    hr: null,
-    heartRate: null,
-    spo2: null,
-    bpSys: null,
-    bpDia: null,
-    bp: null,
+    hr: heartRate,
+    heartRate,
+    pulse: heartRate,
+    spo2,
+    bpSys,
+    bp_sys: bpSys,
+    bpDia,
+    bp_dia: bpDia,
+    bp: (bpSys != null && bpDia != null) ? `${bpSys}/${bpDia}` : null,
 
     // Air Quality MQ-135
     mq135: mq135Status,
@@ -579,40 +732,93 @@ function ingestHardwareTelemetry(raw, clientIp = null) {
     gpsFix,
     gps_lat: gpsLat,
     gps_lng: gpsLng,
+    latitude: gpsLat,
+    longitude: gpsLng,
 
-    healthScore
+    healthScore,
+    health_score: healthScore
   };
 
   // Instant broadcast via Socket.IO for 500ms smooth real-time dashboard updates
   io.emit('sensor_data', normalizedPayload);
   io.emit('telemetry_update', normalizedPayload);
 
+  // Broadcast GPS updates if fix is present and coordinates valid
+  if (gpsFix && isValidCoordinates(gpsLat, gpsLng)) {
+    io.emit('patient:location', {
+      patientId,
+      patient_id: patientId,
+      latitude: gpsLat,
+      longitude: gpsLng,
+      gpsFix: true,
+      gpsSat,
+      timestamp
+    });
+  }
+
   // Evaluate clinical & hardware safety alerts
   const alerts = [];
+  let severity = 'warning';
+
   if (mq135Status === 'ALERT') {
     alerts.push('⚠️ Hazardous Gas / Smoke Threshold Exceeded (MQ-135)');
+    severity = 'critical';
   }
   if (leadOffPlus || leadOffMinus) {
     alerts.push('⚠️ ECG Leads Disconnected (AD8232 LO+/LO- Active)');
   }
 
   db.get('SELECT * FROM thresholds WHERE patient_id = ?', [patientId], (tErr, row) => {
-    if (row && tempF != null && row.temp_max != null && tempF > row.temp_max) {
-      alerts.push(`High Temperature: ${tempF} °F (Threshold: ${row.temp_max} °F)`);
+    if (row) {
+      if (tempF != null && row.temp_max != null && tempF > row.temp_max) {
+        alerts.push(`High Temperature: ${tempF} °F (Threshold: ${row.temp_max} °F)`);
+        if (tempF > 102) severity = 'critical';
+      }
+      if (heartRate != null) {
+        if (row.hr_max != null && heartRate > row.hr_max) {
+          alerts.push(`High Heart Rate: ${heartRate} BPM (Threshold: ${row.hr_max} BPM)`);
+          if (heartRate > 120) severity = 'critical';
+        }
+        if (row.hr_min != null && heartRate < row.hr_min) {
+          alerts.push(`Low Heart Rate: ${heartRate} BPM (Threshold: ${row.hr_min} BPM)`);
+          if (heartRate < 45) severity = 'critical';
+        }
+      }
+      if (spo2 != null && row.spo2_min != null && spo2 < row.spo2_min) {
+        alerts.push(`Low SpO2: ${spo2}% (Threshold: ${row.spo2_min}%)`);
+        if (spo2 < 90) severity = 'critical';
+      }
+      if (bpSys != null && row.bp_sys_max != null && bpSys > row.bp_sys_max) {
+        alerts.push(`High Systolic BP: ${bpSys} mmHg (Threshold: ${row.bp_sys_max} mmHg)`);
+        if (bpSys > 150) severity = 'critical';
+      }
+      if (bpDia != null && row.bp_dia_max != null && bpDia > row.bp_dia_max) {
+        alerts.push(`High Diastolic BP: ${bpDia} mmHg (Threshold: ${row.bp_dia_max} mmHg)`);
+        if (bpDia > 95) severity = 'critical';
+      }
     }
 
     if (alerts.length > 0) {
       db.get('SELECT name FROM patients WHERE id = ?', [patientId], (_pErr, pRow) => {
         const patientName = pRow ? pRow.name : `Patient ${patientId}`;
-        console.warn(`[ALERT] Patient ${patientId} (${patientName}):`, alerts);
-        io.emit('emergency_alert', {
-          id: Date.now() + Math.random(),
+        const alertId = `alert-${patientId}-${Date.now()}`;
+        const alertObj = {
+          id: alertId,
           patient_id: patientId,
+          patientId: patientId,
           patient_name: patientName,
+          patientName: patientName,
           alerts,
+          message: alerts.join(' • '),
           timestamp,
-          severity: mq135Status === 'ALERT' ? 'critical' : 'warning'
-        });
+          severity,
+          status: 'active'
+        };
+
+        recordActiveAlert(alertObj);
+
+        console.warn(`[ALERT] Patient ${patientId} (${patientName}):`, alerts);
+        io.emit('emergency_alert', alertObj);
       });
     }
 
@@ -734,6 +940,554 @@ app.get('/api/device/status', (req, res) => {
   });
 });
 
+// GET /api/alerts — retrieve active and recent emergency alerts
+app.get('/api/alerts', (req, res) => {
+  db.all('SELECT * FROM alerts WHERE status = "active" ORDER BY timestamp DESC LIMIT 20', [], (err, rows) => {
+    if (err || !rows || rows.length === 0) {
+      const list = Array.from(activeAlerts.values()).filter(a => a.status !== 'dismissed');
+      return res.json(list);
+    }
+    const parsed = rows.map(r => {
+      let alertsArr = [];
+      try { alertsArr = JSON.parse(r.alerts); } catch (_) { alertsArr = [r.message]; }
+      return {
+        ...r,
+        patientId: r.patient_id,
+        patientName: r.patient_name,
+        alerts: alertsArr
+      };
+    });
+    res.json(parsed);
+  });
+});
+
+// POST /api/alerts/:id/dismiss — dismiss an active alert
+app.post('/api/alerts/:id/dismiss', (req, res) => {
+  const alertId = req.params.id;
+  if (activeAlerts.has(alertId)) {
+    const a = activeAlerts.get(alertId);
+    a.status = 'dismissed';
+  }
+  db.run('UPDATE alerts SET status = "dismissed" WHERE id = ?', [alertId], () => {
+    res.json({ success: true });
+  });
+});
+
+// POST /api/alerts/clear — clear all active alerts
+app.post('/api/alerts/clear', (req, res) => {
+  activeAlerts.clear();
+  db.run('UPDATE alerts SET status = "dismissed" WHERE status = "active"', () => {
+    res.json({ success: true });
+  });
+});
+
+// ── Emergency & Ambulance Tracking REST Endpoints ────────────────────────────
+
+// GET /api/emergencies — retrieve all emergencies
+app.get('/api/emergencies', (req, res) => {
+  db.all(
+    `SELECT e.*, p.room_number, p.gender, p.age, p.guardian_contact,
+            a.name as ambulance_name, a.status as ambulance_status,
+            a.latitude as ambulance_lat, a.longitude as ambulance_lng,
+            a.is_simulated as ambulance_is_simulated
+     FROM emergencies e
+     LEFT JOIN patients p ON e.patient_id = p.id
+     LEFT JOIN ambulances a ON e.ambulance_id = a.id
+     ORDER BY e.updated_at DESC LIMIT 50`,
+    [],
+    (err, rows) => {
+      if (err) return res.status(500).json({ error: err.message });
+      const mapped = (rows || []).map(r => ({
+        ...r,
+        patientId: r.patient_id,
+        patientName: r.patient_name,
+        emergencyType: r.emergency_type,
+        ambulanceId: r.ambulance_id,
+        gpsFix: Boolean(r.gps_fix),
+        gpsSat: r.gps_sat,
+        initialDistance: r.initial_distance,
+        currentDistance: r.current_distance,
+        estimatedEta: r.estimated_eta_minutes,
+        createdAt: r.created_at,
+        updatedAt: r.updated_at
+      }));
+      res.json(mapped);
+    }
+  );
+});
+
+// GET /api/emergencies/active — retrieve current active emergency
+app.get('/api/emergencies/active', (req, res) => {
+  db.get(
+    `SELECT e.*, p.room_number, p.gender, p.age, p.guardian_contact,
+            a.name as ambulance_name, a.status as ambulance_status,
+            a.latitude as ambulance_lat, a.longitude as ambulance_lng,
+            a.is_simulated as ambulance_is_simulated
+     FROM emergencies e
+     LEFT JOIN patients p ON e.patient_id = p.id
+     LEFT JOIN ambulances a ON e.ambulance_id = a.id
+     WHERE e.status IN ('CREATED', 'ASSIGNED', 'EN_ROUTE', 'ARRIVED')
+     ORDER BY e.updated_at DESC LIMIT 1`,
+    [],
+    (err, row) => {
+      if (err) return res.status(500).json({ error: err.message });
+      if (!row) return res.json(null);
+      res.json({
+        ...row,
+        patientId: row.patient_id,
+        patientName: row.patient_name,
+        emergencyType: row.emergency_type,
+        ambulanceId: row.ambulance_id,
+        gpsFix: Boolean(row.gps_fix),
+        gpsSat: row.gps_sat,
+        initialDistance: row.initial_distance,
+        currentDistance: row.current_distance,
+        estimatedEta: row.estimated_eta_minutes,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at
+      });
+    }
+  );
+});
+
+// POST /api/emergencies — create a new emergency
+app.post('/api/emergencies', (req, res) => {
+  const {
+    patientId,
+    emergencyType = 'SOS',
+    notes = '',
+    latitude = null,
+    longitude = null,
+    gpsFix = false,
+    gpsSat = 0,
+    ambulanceId = null
+  } = req.body;
+
+  if (!patientId) {
+    return res.status(400).json({ error: 'Patient ID is required.' });
+  }
+
+  db.get('SELECT * FROM patients WHERE id = ?', [patientId], (pErr, patient) => {
+    if (pErr || !patient) {
+      return res.status(404).json({ error: 'Patient not found.' });
+    }
+
+    const patientName = patient.name;
+    const now = Date.now();
+    const emgId = `EMG-${now.toString().slice(-6)}`;
+
+    // Validate coordinates
+    const hasValidCoords = Boolean(gpsFix) && isValidCoordinates(latitude, longitude);
+    const validLat = hasValidCoords ? Number(latitude) : null;
+    const validLng = hasValidCoords ? Number(longitude) : null;
+    const validGpsFix = hasValidCoords ? 1 : 0;
+    const validGpsSat = hasValidCoords ? Number(gpsSat || 8) : 0;
+
+    const finalizeCreation = (selectedAmb) => {
+      const ambId = selectedAmb ? selectedAmb.id : (ambulanceId || null);
+      let initialDist = 0;
+      let currentDist = 0;
+      let eta = 0;
+      let progress = 0;
+
+      if (selectedAmb && hasValidCoords && isValidCoordinates(selectedAmb.latitude, selectedAmb.longitude)) {
+        initialDist = haversineDistance(selectedAmb.latitude, selectedAmb.longitude, validLat, validLng);
+        currentDist = initialDist;
+        eta = calculateETA(currentDist);
+        progress = calculateProgress(initialDist, currentDist);
+      }
+
+      const initialStatus = ambId ? 'EN_ROUTE' : 'CREATED';
+
+      db.run(
+        `INSERT INTO emergencies 
+         (id, patient_id, patient_name, emergency_type, status, latitude, longitude, gps_fix, gps_sat, ambulance_id, initial_distance, current_distance, estimated_eta_minutes, progress, notes, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          emgId,
+          patient.id,
+          patientName,
+          emergencyType.toUpperCase(),
+          initialStatus,
+          validLat,
+          validLng,
+          validGpsFix,
+          validGpsSat,
+          ambId,
+          initialDist,
+          currentDist,
+          eta,
+          progress,
+          notes || `${emergencyType} Emergency Triggered`,
+          now,
+          now
+        ],
+        (insErr) => {
+          if (insErr) return res.status(500).json({ error: insErr.message });
+
+          if (ambId) {
+            db.run(
+              `UPDATE ambulances SET status = 'EN_ROUTE', assigned_patient_id = ?, assigned_emergency_id = ?, updated_at = ? WHERE id = ?`,
+              [patient.id, emgId, now, ambId]
+            );
+          }
+
+          const emgObj = {
+            id: emgId,
+            patient_id: patient.id,
+            patientId: patient.id,
+            patient_name: patientName,
+            patientName,
+            emergency_type: emergencyType.toUpperCase(),
+            emergencyType: emergencyType.toUpperCase(),
+            status: initialStatus,
+            latitude: validLat,
+            longitude: validLng,
+            gps_fix: validGpsFix,
+            gpsFix: Boolean(validGpsFix),
+            gps_sat: validGpsSat,
+            gpsSat: validGpsSat,
+            ambulance_id: ambId,
+            ambulanceId: ambId,
+            ambulance_name: selectedAmb ? selectedAmb.name : null,
+            ambulance_lat: selectedAmb ? selectedAmb.latitude : null,
+            ambulance_lng: selectedAmb ? selectedAmb.longitude : null,
+            ambulance_is_simulated: selectedAmb ? Boolean(selectedAmb.is_simulated) : true,
+            initial_distance: initialDist,
+            initialDistance: initialDist,
+            current_distance: currentDist,
+            currentDistance: currentDist,
+            estimated_eta_minutes: eta,
+            estimatedEta: eta,
+            progress,
+            notes: notes || `${emergencyType} Emergency Triggered`,
+            room_number: patient.room_number,
+            gender: patient.gender,
+            age: patient.age,
+            created_at: now,
+            updated_at: now
+          };
+
+          // Integrate with existing emergency alert system
+          const alertMsg = `EMERGENCY [${emergencyType.toUpperCase()}]: ${patientName} (Room ${patient.room_number || 'N/A'})${ambId ? ` — ${ambId} Dispatched` : ''}`;
+          const alertObj = {
+            id: `alert-emg-${emgId}`,
+            patient_id: patient.id,
+            patientId: patient.id,
+            patient_name: patientName,
+            patientName,
+            severity: 'critical',
+            message: alertMsg,
+            alerts: [alertMsg],
+            timestamp: now,
+            status: 'active'
+          };
+
+          recordActiveAlert(alertObj);
+
+          io.emit('emergency:created', emgObj);
+          io.emit('emergency_alert', alertObj);
+          if (ambId) {
+            io.emit('ambulance:status', {
+              ambulanceId: ambId,
+              status: 'EN_ROUTE',
+              assignedPatientId: patient.id,
+              assignedEmergencyId: emgId,
+              updatedAt: now
+            });
+          }
+
+          res.json({ success: true, emergency: emgObj });
+        }
+      );
+    };
+
+    if (ambulanceId) {
+      db.get('SELECT * FROM ambulances WHERE id = ?', [ambulanceId], (aErr, amb) => {
+        finalizeCreation(amb || null);
+      });
+    } else {
+      // Auto-assign first available unit
+      db.get("SELECT * FROM ambulances WHERE status = 'AVAILABLE' LIMIT 1", [], (aErr, amb) => {
+        finalizeCreation(amb || null);
+      });
+    }
+  });
+});
+
+// PUT /api/emergencies/:id/status — update emergency status
+app.put('/api/emergencies/:id/status', (req, res) => {
+  const emgId = req.params.id;
+  const { status, notes } = req.body;
+  const now = Date.now();
+
+  const allowed = ['CREATED', 'ASSIGNED', 'EN_ROUTE', 'ARRIVED', 'COMPLETED', 'CANCELLED'];
+  if (!status || !allowed.includes(status.toUpperCase())) {
+    return res.status(400).json({ error: `Invalid status. Must be one of: ${allowed.join(', ')}` });
+  }
+
+  const upperStatus = status.toUpperCase();
+
+  db.get('SELECT * FROM emergencies WHERE id = ?', [emgId], (err, emg) => {
+    if (err || !emg) return res.status(404).json({ error: 'Emergency not found.' });
+
+    let progress = emg.progress;
+    let eta = emg.estimated_eta_minutes;
+    let dist = emg.current_distance;
+
+    if (upperStatus === 'ARRIVED') {
+      progress = 100;
+      eta = 0;
+      dist = 0;
+    } else if (upperStatus === 'COMPLETED' || upperStatus === 'CANCELLED') {
+      progress = upperStatus === 'COMPLETED' ? 100 : progress;
+    }
+
+    db.run(
+      `UPDATE emergencies 
+       SET status = ?, progress = ?, estimated_eta_minutes = ?, current_distance = ?, notes = COALESCE(?, notes), updated_at = ?
+       WHERE id = ?`,
+      [upperStatus, progress, eta, dist, notes, now, emgId],
+      (uErr) => {
+        if (uErr) return res.status(500).json({ error: uErr.message });
+
+        if (emg.ambulance_id) {
+          let ambStatus = 'AVAILABLE';
+          let clearAssignments = false;
+
+          if (upperStatus === 'ASSIGNED') ambStatus = 'ASSIGNED';
+          else if (upperStatus === 'EN_ROUTE') ambStatus = 'EN_ROUTE';
+          else if (upperStatus === 'ARRIVED') ambStatus = 'ARRIVED';
+          else if (upperStatus === 'COMPLETED' || upperStatus === 'CANCELLED') {
+            ambStatus = 'AVAILABLE';
+            clearAssignments = true;
+          }
+
+          db.run(
+            `UPDATE ambulances 
+             SET status = ?, assigned_patient_id = ?, assigned_emergency_id = ?, updated_at = ?
+             WHERE id = ?`,
+            [
+              ambStatus,
+              clearAssignments ? null : emg.patient_id,
+              clearAssignments ? null : emgId,
+              now,
+              emg.ambulance_id
+            ]
+          );
+
+          io.emit('ambulance:status', {
+            ambulanceId: emg.ambulance_id,
+            status: ambStatus,
+            updatedAt: now
+          });
+        }
+
+        const updated = {
+          ...emg,
+          patientId: emg.patient_id,
+          patientName: emg.patient_name,
+          emergencyType: emg.emergency_type,
+          ambulanceId: emg.ambulance_id,
+          gpsFix: Boolean(emg.gps_fix),
+          gpsSat: emg.gps_sat,
+          initialDistance: emg.initial_distance,
+          currentDistance: dist,
+          estimatedEta: eta,
+          status: upperStatus,
+          progress,
+          notes: notes || emg.notes,
+          updated_at: now
+        };
+
+        if (upperStatus === 'COMPLETED' || upperStatus === 'CANCELLED') {
+          const emgAlertId = `alert-emg-${emgId}`;
+          if (activeAlerts.has(emgAlertId)) {
+            activeAlerts.get(emgAlertId).status = 'dismissed';
+          }
+          db.run('UPDATE alerts SET status = "dismissed" WHERE id = ?', [emgAlertId], () => {
+            const currentAlerts = Array.from(activeAlerts.values()).filter(a => a.status !== 'dismissed');
+            io.emit('active_alerts', currentAlerts);
+          });
+        }
+
+        io.emit('emergency:updated', updated);
+        res.json({ success: true, emergency: updated });
+      }
+    );
+  });
+});
+
+// GET /api/ambulances — retrieve ambulance fleet
+app.get('/api/ambulances', (req, res) => {
+  db.all(
+    `SELECT a.*, e.patient_name as assigned_patient_name, e.emergency_type, e.current_distance, e.estimated_eta_minutes, e.progress
+     FROM ambulances a
+     LEFT JOIN emergencies e ON a.assigned_emergency_id = e.id
+     ORDER BY a.id ASC`,
+    [],
+    (err, rows) => {
+      if (err) return res.status(500).json({ error: err.message });
+      const enriched = (rows || []).map(a => ({
+        ...a,
+        ambulanceId: a.id,
+        isSimulated: Boolean(a.is_simulated)
+      }));
+      res.json(enriched);
+    }
+  );
+});
+
+// POST /api/ambulances/:id/dispatch — dispatch specific ambulance to emergency
+app.post('/api/ambulances/:id/dispatch', (req, res) => {
+  const ambulanceId = req.params.id;
+  const { emergencyId } = req.body;
+  const now = Date.now();
+
+  db.get('SELECT * FROM ambulances WHERE id = ?', [ambulanceId], (aErr, amb) => {
+    if (aErr || !amb) return res.status(404).json({ error: 'Ambulance not found.' });
+
+    db.get('SELECT * FROM emergencies WHERE id = ?', [emergencyId], (eErr, emg) => {
+      if (eErr || !emg) return res.status(404).json({ error: 'Emergency not found.' });
+
+      let dist = 0;
+      if (isValidCoordinates(amb.latitude, amb.longitude) && isValidCoordinates(emg.latitude, emg.longitude)) {
+        dist = haversineDistance(amb.latitude, amb.longitude, emg.latitude, emg.longitude);
+      }
+      const initialDist = emg.initial_distance || dist;
+      const eta = calculateETA(dist);
+      const prog = calculateProgress(initialDist, dist);
+
+      db.run(
+        `UPDATE emergencies 
+         SET ambulance_id = ?, status = 'EN_ROUTE', initial_distance = ?, current_distance = ?, estimated_eta_minutes = ?, progress = ?, updated_at = ?
+         WHERE id = ?`,
+        [ambulanceId, initialDist, dist, eta, prog, now, emergencyId]
+      );
+
+      db.run(
+        `UPDATE ambulances 
+         SET status = 'EN_ROUTE', assigned_patient_id = ?, assigned_emergency_id = ?, updated_at = ?
+         WHERE id = ?`,
+        [emg.patient_id, emergencyId, now, ambulanceId]
+      );
+
+      const updatedAmbulance = {
+        ...amb,
+        status: 'EN_ROUTE',
+        assigned_emergency_id: emergencyId,
+        assigned_patient_id: emg.patient_id,
+        updated_at: now
+      };
+
+      const updatedEmg = {
+        ...emg,
+        ambulance_id: ambulanceId,
+        ambulanceId: ambulanceId,
+        status: 'EN_ROUTE',
+        current_distance: dist,
+        currentDistance: dist,
+        estimated_eta_minutes: eta,
+        estimatedEta: eta,
+        progress: prog,
+        updated_at: now
+      };
+
+      io.emit('ambulance:status', { ambulanceId, status: 'EN_ROUTE', updatedAt: now });
+      io.emit('emergency:updated', updatedEmg);
+
+      res.json({ success: true, ambulance: updatedAmbulance, emergency: updatedEmg });
+    });
+  });
+});
+
+// POST /api/ambulances/:id/location — update ambulance coordinates
+app.post('/api/ambulances/:id/location', (req, res) => {
+  const ambulanceId = req.params.id;
+  const { latitude, longitude } = req.body;
+  const now = Date.now();
+
+  if (!isValidCoordinates(latitude, longitude)) {
+    return res.status(400).json({ error: 'Invalid latitude or longitude.' });
+  }
+
+  const numLat = Number(latitude);
+  const numLng = Number(longitude);
+
+  db.run(
+    `UPDATE ambulances SET latitude = ?, longitude = ?, updated_at = ? WHERE id = ?`,
+    [numLat, numLng, now, ambulanceId],
+    (err) => {
+      if (err) return res.status(500).json({ error: err.message });
+
+      db.get('SELECT * FROM emergencies WHERE ambulance_id = ? AND status = "EN_ROUTE"', [ambulanceId], (eErr, emg) => {
+        let dist = 0;
+        let eta = 0;
+        let prog = 0;
+
+        if (emg && isValidCoordinates(emg.latitude, emg.longitude)) {
+          dist = haversineDistance(numLat, numLng, emg.latitude, emg.longitude);
+          const initialDist = emg.initial_distance || dist;
+          eta = calculateETA(dist);
+          prog = calculateProgress(initialDist, dist);
+
+          db.run(
+            `UPDATE emergencies SET current_distance = ?, estimated_eta_minutes = ?, progress = ?, updated_at = ? WHERE id = ?`,
+            [dist, eta, prog, now, emg.id]
+          );
+
+          io.emit('emergency:updated', {
+            ...emg,
+            current_distance: dist,
+            currentDistance: dist,
+            estimated_eta_minutes: eta,
+            estimatedEta: eta,
+            progress: prog,
+            updated_at: now
+          });
+        }
+
+        const payload = {
+          ambulanceId,
+          latitude: numLat,
+          longitude: numLng,
+          distance: dist,
+          eta,
+          progress: prog,
+          updatedAt: now
+        };
+
+        io.emit('ambulance:location', payload);
+        res.json({ success: true, location: payload });
+      });
+    }
+  );
+});
+
+// POST /api/ambulances/simulator/toggle — toggle simulator running state
+app.post('/api/ambulances/simulator/toggle', (req, res) => {
+  const isRunning = ambulanceSimulator.toggle();
+  res.json({ success: true, isRunning });
+});
+
+// POST /api/ambulances/simulator/step — manually advance simulator step
+app.post('/api/ambulances/simulator/step', async (req, res) => {
+  await ambulanceSimulator.tick();
+  res.json({ success: true, message: 'Simulator advanced 1 step.' });
+});
+
+// POST /api/ambulances/simulator/reset — reset ambulances to starting coordinates
+app.post('/api/ambulances/simulator/reset', (req, res) => {
+  const now = Date.now();
+  db.run(`UPDATE ambulances SET latitude = 20.3002, longitude = 85.8150, status = 'AVAILABLE', assigned_patient_id = NULL, assigned_emergency_id = NULL, updated_at = ? WHERE id = 'AMB-001'`, [now]);
+  db.run(`UPDATE ambulances SET latitude = 20.2850, longitude = 85.8350, status = 'AVAILABLE', assigned_patient_id = NULL, assigned_emergency_id = NULL, updated_at = ? WHERE id = 'AMB-002'`, [now]);
+  db.run(`UPDATE ambulances SET latitude = 20.3120, longitude = 85.8200, status = 'AVAILABLE', assigned_patient_id = NULL, assigned_emergency_id = NULL, updated_at = ? WHERE id = 'AMB-003'`, [now]);
+  db.all('SELECT * FROM ambulances', [], (err, rows) => {
+    io.emit('ambulance:status', { reset: true });
+    res.json({ success: true, ambulances: rows });
+  });
+});
+
 // Helper: detect local LAN IPv4 address for ESP8266 local network connection
 function getLocalLanIp() {
   const ifaces = os.networkInterfaces();
@@ -845,6 +1599,10 @@ app.post('/api/hardware/test-pulse', (req, res) => {
     ip: activeEspConfig.ip || '192.168.1.105',
     deviceId: 'ESP8266-001',
     patientId: activeEspConfig.patientId || 1,
+    hr: 76,
+    spo2: 98,
+    bpSys: 122,
+    bpDia: 78,
     dhtTemp: 28.5,
     humidity: 62.0,
     bmpTemp: 28.3,
@@ -874,6 +1632,42 @@ app.post('/api/hardware/test-pulse', (req, res) => {
 io.on('connection', (socket) => {
   console.log('[SOCKET] Client connected:', socket.id);
 
+  // Synchronize active alerts to newly connected clients
+  const currentAlerts = Array.from(activeAlerts.values()).filter(a => a.status !== 'dismissed');
+  socket.emit('active_alerts', currentAlerts);
+
+  // Synchronize active emergency to newly connected clients
+  db.get(
+    `SELECT e.*, p.room_number, p.gender, p.age,
+            a.name as ambulance_name, a.status as ambulance_status,
+            a.latitude as ambulance_lat, a.longitude as ambulance_lng,
+            a.is_simulated as ambulance_is_simulated
+     FROM emergencies e
+     LEFT JOIN patients p ON e.patient_id = p.id
+     LEFT JOIN ambulances a ON e.ambulance_id = a.id
+     WHERE e.status IN ('CREATED', 'ASSIGNED', 'EN_ROUTE', 'ARRIVED')
+     ORDER BY e.updated_at DESC LIMIT 1`,
+    [],
+    (err, activeEmg) => {
+      if (!err && activeEmg) {
+        socket.emit('emergency:active', {
+          ...activeEmg,
+          patientId: activeEmg.patient_id,
+          patientName: activeEmg.patient_name,
+          emergencyType: activeEmg.emergency_type,
+          ambulanceId: activeEmg.ambulance_id,
+          gpsFix: Boolean(activeEmg.gps_fix),
+          gpsSat: activeEmg.gps_sat,
+          initialDistance: activeEmg.initial_distance,
+          currentDistance: activeEmg.current_distance,
+          estimatedEta: activeEmg.estimated_eta_minutes
+        });
+      } else {
+        socket.emit('emergency:active', null);
+      }
+    }
+  );
+
   // Allow hardware or simulators to ingest via Socket.IO
   socket.on('hardware_telemetry', (data, ack) => {
     try {
@@ -897,7 +1691,7 @@ setInterval(() => {
       val.reportedOnline = false;
       console.warn(`[WATCHDOG] Hardware Device ${devId} went OFFLINE (>10s silent)`);
       
-      io.emit('emergency_alert', {
+      const offlineAlert = {
         id: `device-offline-${devId}-${now}`,
         patient_id: val.patientId,
         patientId: val.patientId,
@@ -907,8 +1701,12 @@ setInterval(() => {
         message: `Hardware Sensor Unit (${devId}) Disconnected / Offline (>10s)`,
         alerts: [`⚠️ Hardware Sensor Unit (${devId}) Disconnected / Offline (>10s)`],
         severity: 'warning',
-        timestamp: now
-      });
+        timestamp: now,
+        status: 'active'
+      };
+      recordActiveAlert(offlineAlert);
+
+      io.emit('emergency_alert', offlineAlert);
       io.emit('sensor_data', {
         deviceId: devId,
         patient_id: val.patientId,

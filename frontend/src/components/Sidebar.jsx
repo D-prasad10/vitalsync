@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { Activity, Stethoscope, LogOut, ShieldCheck, FileText, HeartPulse, X } from 'lucide-react';
+import { Activity, Stethoscope, LogOut, ShieldCheck, FileText, HeartPulse, X, Ambulance } from 'lucide-react';
 
 const Sidebar = ({ user, onLogout, isOpen, onClose }) => {
   const location = useLocation();
@@ -96,6 +96,15 @@ const Sidebar = ({ user, onLogout, isOpen, onClose }) => {
           >
             <ShieldCheck size={18} />
             <span>Staff Management Station</span>
+          </NavLink>
+
+          <NavLink
+            to="/emergency"
+            className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
+            onClick={onClose}
+          >
+            <Ambulance size={18} />
+            <span>Emergency Response</span>
           </NavLink>
 
           <div className="sidebar-footer">

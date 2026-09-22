@@ -113,6 +113,69 @@ const db = new sqlite3.Database(dbPath, (err) => {
         });
       });
 
+      // Alerts Table (persisting system & clinical threshold alerts)
+      db.run(`
+        CREATE TABLE IF NOT EXISTS alerts (
+          id TEXT PRIMARY KEY,
+          patient_id INTEGER,
+          patient_name TEXT,
+          severity TEXT DEFAULT 'warning',
+          message TEXT,
+          alerts TEXT,
+          timestamp INTEGER,
+          status TEXT DEFAULT 'active'
+        )
+      `);
+
+      // Ambulances Table (emergency responder tracking)
+      db.run(`
+        CREATE TABLE IF NOT EXISTS ambulances (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'AVAILABLE',
+          latitude REAL,
+          longitude REAL,
+          assigned_patient_id INTEGER DEFAULT NULL,
+          assigned_emergency_id TEXT DEFAULT NULL,
+          is_simulated INTEGER DEFAULT 1,
+          updated_at INTEGER
+        )
+      `, () => {
+        db.get('SELECT id FROM ambulances LIMIT 1', (err, row) => {
+          if (!row) {
+            const now = Date.now();
+            db.run(`INSERT INTO ambulances (id, name, status, latitude, longitude, is_simulated, updated_at) VALUES ('AMB-001', 'Critical Care Unit 1', 'AVAILABLE', 20.3002, 85.8150, 1, ?)`, [now]);
+            db.run(`INSERT INTO ambulances (id, name, status, latitude, longitude, is_simulated, updated_at) VALUES ('AMB-002', 'Advanced Life Support 2', 'AVAILABLE', 20.2850, 85.8350, 1, ?)`, [now]);
+            db.run(`INSERT INTO ambulances (id, name, status, latitude, longitude, is_simulated, updated_at) VALUES ('AMB-003', 'Rapid Response Unit 3', 'AVAILABLE', 20.3120, 85.8200, 1, ?)`, [now]);
+            console.log('Ambulance fleet seeded.');
+          }
+        });
+      });
+
+      // Emergencies Table (GPS emergency response lifecycle)
+      db.run(`
+        CREATE TABLE IF NOT EXISTS emergencies (
+          id TEXT PRIMARY KEY,
+          patient_id INTEGER,
+          patient_name TEXT,
+          emergency_type TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'CREATED',
+          latitude REAL,
+          longitude REAL,
+          gps_fix INTEGER DEFAULT 0,
+          gps_sat INTEGER DEFAULT 0,
+          ambulance_id TEXT DEFAULT NULL,
+          initial_distance REAL DEFAULT 0,
+          current_distance REAL DEFAULT 0,
+          estimated_eta_minutes REAL DEFAULT 0,
+          progress REAL DEFAULT 0,
+          notes TEXT,
+          created_at INTEGER,
+          updated_at INTEGER,
+          FOREIGN KEY (patient_id) REFERENCES patients(id)
+        )
+      `);
+
       // Seed Patient Data (if empty)
       db.get('SELECT id FROM patients LIMIT 1', (err, row) => {
         if (!row) {
@@ -123,6 +186,12 @@ const db = new sqlite3.Database(dbPath, (err) => {
           db.run(`INSERT INTO thresholds (patient_id) VALUES (2)`);
           
           console.log('Seed data inserted.');
+        } else {
+          // Ensure every patient has a threshold record
+          db.run(`
+            INSERT OR IGNORE INTO thresholds (patient_id)
+            SELECT id FROM patients WHERE id NOT IN (SELECT patient_id FROM thresholds)
+          `, () => {});
         }
       });
     });

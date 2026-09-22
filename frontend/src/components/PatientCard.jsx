@@ -113,7 +113,7 @@ const PatientCard = ({
   }
 
   // Mini vitals data extraction with hardware sensor adaptation
-  const hr = latestVitals.hr ?? latestVitals.heart_rate ?? latestVitals.pulse;
+  const hr = latestVitals.hr ?? latestVitals.heartRate ?? latestVitals.heart_rate ?? latestVitals.pulse;
   const maxIR = latestVitals.maxIR != null && latestVitals.maxIR > 0 ? latestVitals.maxIR : null;
   const hrLabel = hr != null ? `${hr} BPM` : (maxIR != null ? `IR ${maxIR}` : '--');
   const hrTitle = hr != null ? `Heart Rate: ${hr} BPM` : (maxIR != null ? `MAX30100 Raw Optical IR: ${maxIR}` : 'Heart Rate / Optical Stream');
@@ -132,8 +132,13 @@ const PatientCard = ({
   const ecgVal = latestVitals.ecg_val != null ? latestVitals.ecg_val : (latestVitals.ecg?.value ?? null);
   const sys = latestVitals.bpSys ?? latestVitals.bp_sys;
   const dia = latestVitals.bpDia ?? latestVitals.bp_dia;
-  const ecgBpDisplay = ecgVal != null ? `ECG ${ecgVal}` : ((sys != null && dia != null) ? `${sys}/${dia}` : (latestVitals.bp ?? 'No Sensor'));
-  const ecgBpTitle = ecgVal != null ? `AD8232 ECG Amplitude: ${ecgVal} ADC` : ((sys != null && dia != null) ? `BP: ${sys}/${dia} mmHg` : 'Blood Pressure: Unavailable (No Sensor Attached)');
+  const pressureVal = latestVitals.pressure ?? latestVitals.bmpPress;
+  const ecgBpDisplay = (sys != null && dia != null)
+    ? `${sys}/${dia}`
+    : (ecgVal != null ? `ECG ${ecgVal}` : (latestVitals.bp ?? (pressureVal != null ? `${pressureVal} hPa` : 'No Sensor')));
+  const ecgBpTitle = (sys != null && dia != null)
+    ? `Blood Pressure: ${sys}/${dia} mmHg`
+    : (ecgVal != null ? `AD8232 ECG Amplitude: ${ecgVal} ADC` : (pressureVal != null ? `Barometric Pressure: ${pressureVal} hPa` : 'Sensor Stream'));
 
   // Default Grid Variant
   return (

@@ -1,13 +1,15 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Search, Filter, ArrowLeft, Heart, Wind, Thermometer, Activity, User, Phone, Stethoscope, Bell, Plus, Trash2, CheckCircle2, AlertTriangle, ShieldAlert, Settings, Waves, Radio, MapPin, Gauge, Cpu, Navigation, Flame } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Search, Filter, ArrowLeft, Heart, Wind, Thermometer, Activity, User, Phone, Stethoscope, Bell, Plus, Trash2, CheckCircle2, AlertTriangle, ShieldAlert, Settings, Waves, Radio, MapPin, Gauge, Cpu, Navigation, Flame, Ambulance } from 'lucide-react';
 import SensorGraph from '../components/SensorGraph';
 import HistoryBarGraph from '../components/HistoryBarGraph';
 import HealthScorePanel from '../components/HealthScorePanel';
 import PatientCard from '../components/PatientCard';
-import { useRealtimeData, seedPatientTelemetry } from '../utils/telemetryStore';
+import { useRealtimeData, seedPatientTelemetry, useEmergencyResponse } from '../utils/telemetryStore';
 
 const DoctorDashboard = () => {
   const globalRealtimeData = useRealtimeData();
+  const { activeEmergency } = useEmergencyResponse();
   const [isMuted, setIsMuted] = useState(false);
   const [patients, setPatients] = useState([]);
   const [activePatient, setActivePatient] = useState(null);
@@ -15,7 +17,7 @@ const DoctorDashboard = () => {
   const [_groupedHistory, setGroupedHistory] = useState({});
   const [_selectedDate, setSelectedDate] = useState('');
   const [thresholds, setThresholds] = useState({});
-  const [_loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [loadingPatients, setLoadingPatients] = useState(true);
   const [actionFeedback, setActionFeedback] = useState(null);
   const [deviceStatus, setDeviceStatus] = useState({ online: false, deviceId: null, lastSeen: null, ip: null });
@@ -419,6 +421,104 @@ const DoctorDashboard = () => {
         </div>
       )}
 
+      {/* ── ACTIVE EMERGENCY RESPONSE CARD ───────────────────────────────── */}
+      {activeEmergency && activeEmergency.status !== 'COMPLETED' && activeEmergency.status !== 'CANCELLED' && (
+        <div
+          className="fade-in glass-panel"
+          style={{
+            marginBottom: '1.5rem',
+            padding: '1.15rem 1.4rem',
+            border: '1.5px solid #dc2626',
+            borderLeft: '6px solid #b91c1c',
+            background: 'linear-gradient(to right, #fff5f5, #ffffff)',
+            borderRadius: 'var(--radius-md)',
+            boxShadow: '0 4px 16px rgba(220, 38, 38, 0.12)'
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+              <div
+                style={{
+                  width: '42px',
+                  height: '42px',
+                  borderRadius: '50%',
+                  background: '#fee2e2',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#dc2626',
+                  flexShrink: 0
+                }}
+              >
+                <ShieldAlert size={22} />
+              </div>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                  <span style={{ fontWeight: 700, fontSize: '0.98rem', color: '#991b1b' }}>
+                    ACTIVE EMERGENCY: {activeEmergency.patientName || activeEmergency.patient_name || 'Inpatient'}
+                  </span>
+                  <span
+                    style={{
+                      background: '#dc2626',
+                      color: '#ffffff',
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      padding: '2px 8px',
+                      borderRadius: '12px'
+                    }}
+                  >
+                    {activeEmergency.emergencyType || activeEmergency.emergency_type || 'SOS'}
+                  </span>
+                  <span className="badge badge-warning" style={{ fontSize: '11px' }}>
+                    {activeEmergency.status}
+                  </span>
+                  <span className="demo-simulated-pill" style={{ fontSize: '10px' }}>
+                    DEMO / SIMULATED
+                  </span>
+                </div>
+                <div style={{ fontSize: '0.82rem', color: '#64748b', marginTop: '0.2rem', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                  <span>Ambulance: <b>{activeEmergency.ambulanceId || activeEmergency.ambulance_id || 'Pending Unit'}</b></span>
+                  <span>Distance: <b>{activeEmergency.currentDistance != null ? `${Number(activeEmergency.currentDistance).toFixed(1)} km` : (activeEmergency.current_distance != null ? `${Number(activeEmergency.current_distance).toFixed(1)} km` : '--')}</b></span>
+                  <span>Estimated ETA: <b>{activeEmergency.estimatedEta != null ? `${activeEmergency.estimatedEta} min` : (activeEmergency.estimated_eta_minutes != null ? `${activeEmergency.estimated_eta_minutes} min` : '--')}</b></span>
+                  <span>Progress: <b>{Math.round(activeEmergency.progress || 0)}%</b></span>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+              <div style={{ width: '110px' }}>
+                <div style={{ height: '6px', background: '#e2e8f0', borderRadius: '4px', overflow: 'hidden' }}>
+                  <div
+                    style={{
+                      height: '100%',
+                      width: `${Math.round(activeEmergency.progress || 0)}%`,
+                      backgroundColor: (activeEmergency.progress || 0) >= 100 ? '#10b981' : '#dc2626',
+                      transition: 'width 0.3s ease'
+                    }}
+                  />
+                </div>
+              </div>
+
+              <Link
+                to="/emergency"
+                className="btn-primary"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  fontSize: '0.85rem',
+                  padding: '0.45rem 0.95rem',
+                  textDecoration: 'none'
+                }}
+              >
+                <Ambulance size={16} />
+                <span>View Emergency Response</span>
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── PATIENT DIRECTORY (GRID VIEW) ────────────────────────────────── */}
       {!activePatient ? (
         <div>
@@ -673,6 +773,7 @@ const DoctorDashboard = () => {
                   <SensorGraph
                     title="Temperature (DHT11 & BMP280)"
                     unit="°C"
+                    loading={loading}
                     dataPoints={currentRealtimeData}
                     dataKey="temp"
                     color="#20c997"
@@ -689,6 +790,7 @@ const DoctorDashboard = () => {
                   <SensorGraph
                     title="MAX30100 (Raw Optical Only)"
                     unit="IR/RED"
+                    loading={loading}
                     dataPoints={currentRealtimeData}
                     dataKey="maxIR"
                     color="#ff4d4f"
@@ -705,6 +807,7 @@ const DoctorDashboard = () => {
                   <SensorGraph
                     title="Blood Pressure"
                     unit="mmHg"
+                    loading={loading}
                     dataPoints={currentRealtimeData}
                     dataKey="bpSys"
                     color="#ffc107"
@@ -717,6 +820,7 @@ const DoctorDashboard = () => {
                   <SensorGraph
                     title="Humidity (DHT11)"
                     unit="%"
+                    loading={loading}
                     dataPoints={currentRealtimeData}
                     dataKey="humidity"
                     color="#00d2ff"
@@ -754,6 +858,7 @@ const DoctorDashboard = () => {
                 <SensorGraph
                   title="AD8232 Continuous ECG Waveform"
                   unit="ADC"
+                  loading={loading}
                   dataPoints={currentRealtimeData}
                   dataKey="ecg_val"
                   color="#00f0ff"

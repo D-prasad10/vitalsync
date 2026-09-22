@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Activity, ShieldAlert, PhoneCall, Stethoscope, Pencil, Check, X, User, AlertTriangle, Users, Search, Heart, Wind, Thermometer } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Activity, ShieldAlert, PhoneCall, Stethoscope, Pencil, Check, X, User, AlertTriangle, Users, Search, Heart, Wind, Thermometer, Ambulance } from 'lucide-react';
 import SensorGraph from '../components/SensorGraph';
 import HealthScorePanel from '../components/HealthScorePanel';
 import PatientCard from '../components/PatientCard';
@@ -24,6 +25,7 @@ const CaretakerDashboard = () => {
       doctor_phone: p.doctor_phone || ''
     });
     setContactEdit({ guardian: false, doctor: false });
+    setLoading(true);
 
     fetch(`http://localhost:5001/api/patients/${p.id}/history`)
       .then(res => res.json())
@@ -33,8 +35,12 @@ const CaretakerDashboard = () => {
         if (hist.length > 0) {
           seedPatientTelemetry(p.id, hist);
         }
+        setLoading(false);
       })
-      .catch(() => setHistory([]));
+      .catch(() => {
+        setHistory([]);
+        setLoading(false);
+      });
   }, []);
 
   useEffect(() => {
@@ -98,7 +104,7 @@ const CaretakerDashboard = () => {
     const temp = latest.temp ?? latest.temperature;
 
     if (score < 50 || (spo2 && spo2 < 90) || (hr && (hr > 120 || hr < 40)) || (temp && temp > 103)) return 'Critical';
-    if (score < 80 || (spo2 && spo2 < 95) || (hr && (hr > 100 || hr < 50)) || (temp && temp > 100.4)) return 'Warning';
+    if (score < 75 || (spo2 && spo2 < 95) || (hr && (hr > 100 || hr < 55)) || (temp && temp > 99.5)) return 'Warning';
     return 'Stable';
   };
 
@@ -120,7 +126,16 @@ const CaretakerDashboard = () => {
             </p>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <Link
+              to="/emergency"
+              className="btn-secondary"
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '0.4rem 0.85rem', fontSize: '0.82rem', textDecoration: 'none' }}
+            >
+              <Ambulance size={15} color="var(--accent-primary)" />
+              <span>Emergency Response</span>
+            </Link>
+
             <span className="badge badge-stable" style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '0.4rem 0.85rem' }}>
               <span className="pulse-dot" style={{ width: '7px', height: '7px', backgroundColor: '#10b981' }} />
               Live Hardware Stream
@@ -268,11 +283,11 @@ const CaretakerDashboard = () => {
                     <span className="vital-mini-title">Heart Rate</span>
                   </div>
                   <div className="vital-mini-value">
-                    {latestPoint.hr != null ? latestPoint.hr : (latestPoint.maxIR > 0 ? `IR ${latestPoint.maxIR}` : '72')}
-                    <span className="vital-mini-unit">BPM</span>
+                    {(latestPoint.hr ?? latestPoint.heartRate) != null ? (latestPoint.hr ?? latestPoint.heartRate) : (latestPoint.maxIR > 0 ? `IR ${latestPoint.maxIR}` : '--')}
+                    <span className="vital-mini-unit">{(latestPoint.hr ?? latestPoint.heartRate) != null ? 'BPM' : ''}</span>
                   </div>
-                  <span className={`vital-mini-badge ${(latestPoint.hr > 120 || (latestPoint.hr && latestPoint.hr < 50)) ? 'critical' : (latestPoint.hr > 100 || (latestPoint.hr && latestPoint.hr < 60)) ? 'warning' : 'stable'}`}>
-                    {(latestPoint.hr > 120 || (latestPoint.hr && latestPoint.hr < 50)) ? 'Critical' : (latestPoint.hr > 100 || (latestPoint.hr && latestPoint.hr < 60)) ? 'Warning' : 'Normal'}
+                  <span className={`vital-mini-badge ${((latestPoint.hr ?? latestPoint.heartRate) > 120 || ((latestPoint.hr ?? latestPoint.heartRate) && (latestPoint.hr ?? latestPoint.heartRate) < 50)) ? 'critical' : ((latestPoint.hr ?? latestPoint.heartRate) > 100 || ((latestPoint.hr ?? latestPoint.heartRate) && (latestPoint.hr ?? latestPoint.heartRate) < 60)) ? 'warning' : 'stable'}`}>
+                    {((latestPoint.hr ?? latestPoint.heartRate) > 120 || ((latestPoint.hr ?? latestPoint.heartRate) && (latestPoint.hr ?? latestPoint.heartRate) < 50)) ? 'Critical' : ((latestPoint.hr ?? latestPoint.heartRate) > 100 || ((latestPoint.hr ?? latestPoint.heartRate) && (latestPoint.hr ?? latestPoint.heartRate) < 60)) ? 'Warning' : 'Normal'}
                   </span>
                 </div>
 
@@ -283,8 +298,8 @@ const CaretakerDashboard = () => {
                     <span className="vital-mini-title">SpO2 Oxygen</span>
                   </div>
                   <div className="vital-mini-value">
-                    {latestPoint.spo2 != null ? latestPoint.spo2 : (latestPoint.maxRED > 0 ? `RED ${latestPoint.maxRED}` : '98')}
-                    <span className="vital-mini-unit">%</span>
+                    {latestPoint.spo2 != null ? `${latestPoint.spo2}` : (latestPoint.maxRED > 0 ? `RED ${latestPoint.maxRED}` : '--')}
+                    <span className="vital-mini-unit">{latestPoint.spo2 != null ? '%' : ''}</span>
                   </div>
                   <span className={`vital-mini-badge ${(latestPoint.spo2 && latestPoint.spo2 < 90) ? 'critical' : (latestPoint.spo2 && latestPoint.spo2 < 95) ? 'warning' : 'stable'}`}>
                     {(latestPoint.spo2 && latestPoint.spo2 < 90) ? 'Critical' : (latestPoint.spo2 && latestPoint.spo2 < 95) ? 'Warning' : 'Normal'}
@@ -298,11 +313,11 @@ const CaretakerDashboard = () => {
                     <span className="vital-mini-title">Blood Pressure</span>
                   </div>
                   <div className="vital-mini-value">
-                    {latestPoint.bpSys != null ? `${latestPoint.bpSys}/${latestPoint.bpDia || '--'}` : (latestPoint.bmpPress != null ? `${latestPoint.bmpPress} hPa` : '120/80')}
-                    <span className="vital-mini-unit">{latestPoint.bpSys != null ? 'mmHg' : ''}</span>
+                    {(latestPoint.bpSys ?? latestPoint.bp_sys) != null ? `${latestPoint.bpSys ?? latestPoint.bp_sys}/${(latestPoint.bpDia ?? latestPoint.bp_dia) ?? '--'}` : ((latestPoint.bmpPress ?? latestPoint.pressure) != null ? `${latestPoint.bmpPress ?? latestPoint.pressure} hPa` : 'Unavailable (No Sensor)')}
+                    <span className="vital-mini-unit">{(latestPoint.bpSys ?? latestPoint.bp_sys) != null ? 'mmHg' : ''}</span>
                   </div>
-                  <span className={`vital-mini-badge ${(latestPoint.bpSys > 140 || (latestPoint.bpSys && latestPoint.bpSys < 80)) ? 'critical' : (latestPoint.bpSys > 120 || (latestPoint.bpSys && latestPoint.bpSys < 90)) ? 'warning' : 'stable'}`}>
-                    {(latestPoint.bpSys > 140 || (latestPoint.bpSys && latestPoint.bpSys < 80)) ? 'Crisis' : (latestPoint.bpSys > 120 || (latestPoint.bpSys && latestPoint.bpSys < 90)) ? 'Elevated' : 'Normal'}
+                  <span className={`vital-mini-badge ${((latestPoint.bpSys ?? latestPoint.bp_sys) > 140 || ((latestPoint.bpSys ?? latestPoint.bp_sys) && (latestPoint.bpSys ?? latestPoint.bp_sys) < 80)) ? 'critical' : ((latestPoint.bpSys ?? latestPoint.bp_sys) > 120 || ((latestPoint.bpSys ?? latestPoint.bp_sys) && (latestPoint.bpSys ?? latestPoint.bp_sys) < 90)) ? 'warning' : 'stable'}`}>
+                    {((latestPoint.bpSys ?? latestPoint.bp_sys) > 140 || ((latestPoint.bpSys ?? latestPoint.bp_sys) && (latestPoint.bpSys ?? latestPoint.bp_sys) < 80)) ? 'Crisis' : ((latestPoint.bpSys ?? latestPoint.bp_sys) > 120 || ((latestPoint.bpSys ?? latestPoint.bp_sys) && (latestPoint.bpSys ?? latestPoint.bp_sys) < 90)) ? 'Elevated' : 'Normal'}
                   </span>
                 </div>
 
@@ -313,10 +328,10 @@ const CaretakerDashboard = () => {
                     <span className="vital-mini-title">Temperature</span>
                   </div>
                   <div className="vital-mini-value">
-                    {latestPoint.dhtTemp != null ? `${latestPoint.dhtTemp}°C` : (latestPoint.temp != null ? `${latestPoint.temp}°F` : '98.6°F')}
+                    {latestPoint.dhtTemp != null ? `${latestPoint.dhtTemp}°C` : ((latestPoint.temp ?? latestPoint.temperature) != null ? `${latestPoint.temp ?? latestPoint.temperature}°F` : '--')}
                   </div>
-                  <span className={`vital-mini-badge ${(latestPoint.temp > 101 || (latestPoint.temp && latestPoint.temp < 95)) ? 'critical' : (latestPoint.temp > 99 || (latestPoint.temp && latestPoint.temp < 97)) ? 'warning' : 'stable'}`}>
-                    {(latestPoint.temp > 101 || (latestPoint.temp && latestPoint.temp < 95)) ? 'Fever' : 'Normal'}
+                  <span className={`vital-mini-badge ${((latestPoint.temp ?? latestPoint.temperature) > 101 || ((latestPoint.temp ?? latestPoint.temperature) && (latestPoint.temp ?? latestPoint.temperature) < 95)) ? 'critical' : ((latestPoint.temp ?? latestPoint.temperature) > 99 || ((latestPoint.temp ?? latestPoint.temperature) && (latestPoint.temp ?? latestPoint.temperature) < 97)) ? 'warning' : 'stable'}`}>
+                    {((latestPoint.temp ?? latestPoint.temperature) > 101 || ((latestPoint.temp ?? latestPoint.temperature) && (latestPoint.temp ?? latestPoint.temperature) < 95)) ? 'Fever' : 'Normal'}
                   </span>
                 </div>
               </div>
@@ -522,14 +537,15 @@ const CaretakerDashboard = () => {
             <SensorGraph
               title="Heart Rate (MAX30100)"
               unit="BPM"
+              loading={loading}
               dataPoints={currentRealtimeData}
               dataKey="hr"
               color="#e11d48"
               yMin={40}
               yMax={160}
               displayValue={
-                latestPoint.hr != null
-                  ? `${latestPoint.hr} BPM`
+                (latestPoint.hr ?? latestPoint.heartRate) != null
+                  ? `${latestPoint.hr ?? latestPoint.heartRate} BPM`
                   : (latestPoint.maxIR != null && latestPoint.maxIR > 0 ? `IR ${latestPoint.maxIR}` : '--')
               }
             />
@@ -540,6 +556,7 @@ const CaretakerDashboard = () => {
             <SensorGraph
               title="Oxygen Saturation (SpO2)"
               unit="%"
+              loading={loading}
               dataPoints={currentRealtimeData}
               dataKey="spo2"
               color="#7e22ce"
@@ -558,6 +575,7 @@ const CaretakerDashboard = () => {
             <SensorGraph
               title="Temperature (DHT11 & BMP280)"
               unit="°C"
+              loading={loading}
               dataPoints={currentRealtimeData}
               dataKey="temp"
               color="#1d4ed8"
@@ -566,7 +584,7 @@ const CaretakerDashboard = () => {
               displayValue={
                 latestPoint.dhtTemp != null || latestPoint.bmpTemp != null
                   ? `DHT: ${latestPoint.dhtTemp ?? '--'}°C | BMP: ${latestPoint.bmpTemp ?? '--'}°C`
-                  : (latestPoint.temp != null ? `${latestPoint.temp}°F` : '--')
+                  : ((latestPoint.temp ?? latestPoint.temperature) != null ? `${latestPoint.temp ?? latestPoint.temperature}°F` : '--')
               }
             />
           </div>
@@ -576,15 +594,16 @@ const CaretakerDashboard = () => {
             <SensorGraph
               title="Pressure (BMP280 Barometric)"
               unit="hPa"
+              loading={loading}
               dataPoints={currentRealtimeData}
-              dataKey="bmpPress"
+              dataKey="pressure"
               color="#0f766e"
               yMin={900}
               yMax={1100}
               displayValue={
-                latestPoint.bmpPress != null
-                  ? `${latestPoint.bmpPress} hPa`
-                  : (latestPoint.bpSys != null ? `${latestPoint.bpSys}/${latestPoint.bpDia || '--'} mmHg` : 'Unavailable (No Sensor)')
+                (latestPoint.pressure ?? latestPoint.bmpPress) != null
+                  ? `${latestPoint.pressure ?? latestPoint.bmpPress} hPa`
+                  : ((latestPoint.bpSys ?? latestPoint.bp_sys) != null ? `${latestPoint.bpSys ?? latestPoint.bp_sys}/${(latestPoint.bpDia ?? latestPoint.bp_dia) ?? '--'} mmHg` : 'Unavailable (No Sensor)')
               }
             />
           </div>
@@ -594,6 +613,7 @@ const CaretakerDashboard = () => {
             <SensorGraph
               title="ECG Waveform (AD8232)"
               unit="ADC"
+              loading={loading}
               dataPoints={currentRealtimeData}
               dataKey="ecg_val"
               color="#1e40af"

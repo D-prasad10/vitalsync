@@ -8,6 +8,7 @@ import CaretakerDashboard from './pages/CaretakerDashboard';
 import PatientInfo from './pages/PatientInfo';
 import StaffManagement from './pages/StaffManagement';
 import Reports from './pages/Reports';
+import EmergencyResponse from './pages/EmergencyResponse';
 import EmergencyAlertPanel from './components/EmergencyAlertPanel';
 import { getSocket } from './utils/telemetryStore';
 import { getStoredUser, roleHome } from './utils/auth';
@@ -51,6 +52,7 @@ const AppLayout = ({
 }) => {
   const location = useLocation();
   const isCaretakerStation = location.pathname === '/caretaker';
+  const isEmergencyPage = location.pathname === '/emergency' || location.pathname === '/emergency-response';
 
   return (
     <div className={`app-container ${currentUser ? 'authenticated' : ''}`}>
@@ -71,7 +73,7 @@ const AppLayout = ({
       )}
 
       <div className={`main-layout ${currentUser ? 'with-topbar' : ''}`}>
-        <main className={`main-content ${isCaretakerStation ? 'caretaker-page-content' : ''}`}>
+        <main className={`main-content ${isCaretakerStation ? 'caretaker-page-content' : ''} ${isEmergencyPage ? 'emergency-page-content' : ''}`}>
           <Routes>
             <Route
               path="/login"
@@ -94,6 +96,20 @@ const AppLayout = ({
                   <CaretakerDashboard />
                 </ProtectedRoute>
               }
+            />
+
+            <Route
+              path="/emergency"
+              element={
+                <ProtectedRoute user={currentUser} allowedRoles={['doctor', 'caretaker', 'staff']}>
+                  <EmergencyResponse />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/emergency-response"
+              element={<Navigate to="/emergency" replace />}
             />
 
             <Route
@@ -145,7 +161,7 @@ const AppLayout = ({
             <Route path="*" element={<Navigate to={home} replace />} />
           </Routes>
         </main>
-        {currentUser && !isCaretakerStation && <EmergencyAlertPanel />}
+        {currentUser && !isCaretakerStation && !isEmergencyPage && <EmergencyAlertPanel />}
       </div>
     </div>
   );
